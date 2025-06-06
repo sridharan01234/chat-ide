@@ -5,7 +5,7 @@
  * including drop zones, file trees, and drag-and-drop functionality.
  *
  * @fileoverview Tree data providers and drag-drop controllers
- * @author AI Code Assistant Extension
+ * @author SRIDHARAN THILLAIYAPPAN
  * @version 1.0.0
  */
 

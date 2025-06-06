@@ -8,7 +8,7 @@
  * - Event listener configuration
  *
  * @fileoverview Main extension implementation
- * @author AI Code Assistant Extension
+ * @author SRIDHARAN THILLAIYAPPAN
  * @version 1.0.0
  */
 

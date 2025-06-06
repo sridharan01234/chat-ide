@@ -5,7 +5,7 @@
  * webview communication, and chat state management.
  *
  * @fileoverview Chat provider and message management
- * @author AI Code Assistant Extension
+ * @author SRIDHARAN THILLAIYAPPAN
  * @version 1.0.0
  */
 

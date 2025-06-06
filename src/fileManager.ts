@@ -5,7 +5,7 @@
  * attachment management, and drag-and-drop handling.
  *
  * @fileoverview File management and processing utilities
- * @author AI Code Assistant Extension
+ * @author SRIDHARAN THILLAIYAPPAN
  * @version 1.0.0
  */
 

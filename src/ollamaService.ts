@@ -5,7 +5,7 @@
  * Provides methods for generating responses using various AI models
  *
  * @fileoverview Ollama AI service implementation
- * @author AI Code Assistant Extension
+ * @author SRIDHARAN THILLAIYAPPAN
  * @version 1.0.0
  */
 

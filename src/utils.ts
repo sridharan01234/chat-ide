@@ -5,7 +5,7 @@
  * Centralizing utilities here improves code reusability and maintainability.
  *
  * @fileoverview Utility functions and helpers
- * @author AI Code Assistant Extension
+ * @author SRIDHARAN THILLAIYAPPAN
  * @version 1.0.0
  */
 

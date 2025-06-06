@@ -5,7 +5,7 @@
  * Centralizing types here improves maintainability and prevents circular dependencies.
  *
  * @fileoverview Centralized type definitions
- * @author AI Code Assistant Extension
+ * @author SRIDHARAN THILLAIYAPPAN
  * @version 1.0.0
  */
 
