@@ -1,264 +1,486 @@
+/**
+ * VS Code Chat Webview Script
+ * Handles communication between the webview and VS Code extension for AI chat functionality
+ * Supports drag-and-drop file attachments from various sources
+ * 
+ * @fileoverview Main script for the AI Code Assistant chat webview
+ * @author AI Code Assistant Extension
+ * @version 1.0.0
+ */
+
+// VS Code API instance for communication with the extension
 const vscode = acquireVsCodeApi();
+
+// Chat messages array - stores all conversation history
 let messages = [];
 
-// VS Code specific drag and drop handling
-document.addEventListener('dragover', function(e) {
+// DOM element references (cached for performance)
+let chatContainer, dropIndicator, messageInput, sendButton, attachButton;
+
+/**
+ * Initialize DOM element references
+ * Called once when the page loads to cache frequently used elements
+ */
+function initializeDOMReferences() {
+    chatContainer = document.getElementById('chatContainer');
+    dropIndicator = document.getElementById('dropIndicator');
+    messageInput = document.getElementById('messageInput');
+    sendButton = document.getElementById('sendButton');
+    attachButton = document.getElementById('attachButton');
+}
+
+/**
+ * Handle dragover events to enable file dropping
+ * Shows visual feedback when files are dragged over the chat area
+ * 
+ * @param {DragEvent} e - The dragover event
+ */
+function handleDragOver(e) {
     e.preventDefault(); // CRITICAL: Must prevent default to allow drop
     e.stopPropagation();
     
-    const container = document.getElementById('chatContainer');
-    const indicator = document.getElementById('dropIndicator');
-    
-    container.classList.add('drag-active');
-    indicator.style.display = 'block';
-});
+    showDropIndicator();
+}
 
-document.addEventListener('dragleave', function(e) {
-    // Only hide if leaving the document entirely
+/**
+ * Handle dragleave events to hide drop indicator when drag leaves the area
+ * Only hides indicator when actually leaving the document (not just moving between elements)
+ * 
+ * @param {DragEvent} e - The dragleave event
+ */
+function handleDragLeave(e) {
+    // Only hide if leaving the document entirely (coordinates will be 0,0)
     if (e.clientX === 0 && e.clientY === 0) {
-        const container = document.getElementById('chatContainer');
-        const indicator = document.getElementById('dropIndicator');
-        
-        container.classList.remove('drag-active');
-        indicator.style.display = 'none';
+        hideDropIndicator();
     }
-});
+}
 
-document.addEventListener('drop', function(e) {
+/**
+ * Show the drop indicator and add drag-active styling
+ */
+function showDropIndicator() {
+    chatContainer.classList.add('drag-active');
+    dropIndicator.style.display = 'block';
+}
+
+/**
+ * Hide the drop indicator and remove drag-active styling
+ */
+function hideDropIndicator() {
+    chatContainer.classList.remove('drag-active');
+    dropIndicator.style.display = 'none';
+}
+
+/**
+ * Handle file drop events from various sources (VS Code Explorer, Editor tabs, OS files)
+ * Processes different data transfer formats and sends appropriate messages to the extension
+ * 
+ * @param {DragEvent} e - The drop event containing file data
+ */
+function handleDrop(e) {
     e.preventDefault();
     e.stopPropagation();
     
     console.log('[Webview] Drop event triggered');
     
-    const container = document.getElementById('chatContainer');
-    const indicator = document.getElementById('dropIndicator');
+    hideDropIndicator();
     
-    container.classList.remove('drag-active');
-    indicator.style.display = 'none';
-    
-    // VS Code specific: Extract data using proper MIME types
     const dataTransfer = e.dataTransfer;
     
-    // Log all available types for debugging
-    console.log('[Webview] DataTransfer types:', dataTransfer.types);
-    console.log('[Webview] DataTransfer items count:', dataTransfer.items.length);
-    console.log('[Webview] DataTransfer files count:', dataTransfer.files.length);
+    // Log available types for debugging
+    console.log('[Webview] Available data types:', Array.from(dataTransfer.types));
     
-    // Try all possible data extraction methods
-    let foundData = false;
+    // Process drop data in order of preference
+    if (processVSCodeUriList(dataTransfer) ||
+        processResourceUrls(dataTransfer) ||
+        processCodeEditors(dataTransfer) ||
+        processUriList(dataTransfer) ||
+        processPlainText(dataTransfer) ||
+        processOSFiles(dataTransfer)) {
+        return; // Successfully processed
+    }
     
-    // Method 1: Try application/vnd.code.uri-list (Editor tabs use this)
-    const vscodeUriList = dataTransfer.getData('application/vnd.code.uri-list');
-    if (vscodeUriList && vscodeUriList.trim()) {
-        console.log('[Webview] VS Code URI list found:', vscodeUriList);
-        const uris = vscodeUriList.split(/[\r\n]+/).filter(uri => uri.trim());
-        if (uris.length > 0) {
-            vscode.postMessage({
+    // No supported data found
+    handleDropFailure(dataTransfer);
+}
+
+/**
+ * Process VS Code URI list format (primary method for editor tabs)
+ * 
+ * @param {DataTransfer} dataTransfer - The drop event's data transfer object
+ * @returns {boolean} True if data was processed successfully
+ */
+function processVSCodeUriList(dataTransfer) {
+    const data = dataTransfer.getData('application/vnd.code.uri-list');
+    if (!data?.trim()) return false;
+    
+    console.log('[Webview] VS Code URI list found:', data);
+    const uris = data.split(/[\r\n]+/).filter(uri => uri.trim());
+    
+    if (uris.length > 0) {
+        sendMessage({
+            type: 'filesDropped',
+            source: 'vscode-editor-tab',
+            uris: uris
+        });
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Process resource URLs format (alternative for editor tabs)
+ * 
+ * @param {DataTransfer} dataTransfer - The drop event's data transfer object
+ * @returns {boolean} True if data was processed successfully
+ */
+function processResourceUrls(dataTransfer) {
+    const data = dataTransfer.getData('resourceurls');
+    if (!data?.trim()) return false;
+    
+    console.log('[Webview] Resource URLs found:', data);
+    const uris = data.split(/[\r\n]+/).filter(uri => uri.trim());
+    
+    if (uris.length > 0) {
+        sendMessage({
+            type: 'filesDropped',
+            source: 'vscode-editor-tab',
+            uris: uris
+        });
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Process code editors format (structured data from editor tabs)
+ * Handles both JSON and plain text formats
+ * 
+ * @param {DataTransfer} dataTransfer - The drop event's data transfer object
+ * @returns {boolean} True if data was processed successfully
+ */
+function processCodeEditors(dataTransfer) {
+    const data = dataTransfer.getData('codeeditors');
+    if (!data?.trim()) return false;
+    
+    console.log('[Webview] Code editors data found:', data);
+    
+    try {
+        // Try parsing as JSON
+        const editorData = JSON.parse(data);
+        
+        if (editorData?.resource) {
+            sendMessage({
                 type: 'filesDropped',
                 source: 'vscode-editor-tab',
-                uris: uris
+                uris: [editorData.resource]
             });
-            foundData = true;
+            return true;
         }
-    }
-    
-    // Method 2: Try resourceurls (Editor tabs)
-    if (!foundData) {
-        const resourceUrls = dataTransfer.getData('resourceurls');
-        if (resourceUrls && resourceUrls.trim()) {
-            console.log('[Webview] Resource URLs found:', resourceUrls);
-            const uris = resourceUrls.split(/[\r\n]+/).filter(uri => uri.trim());
+        
+        if (Array.isArray(editorData)) {
+            const uris = editorData.map(item => item.resource).filter(Boolean);
             if (uris.length > 0) {
-                vscode.postMessage({
+                sendMessage({
                     type: 'filesDropped',
                     source: 'vscode-editor-tab',
                     uris: uris
                 });
-                foundData = true;
+                return true;
             }
         }
-    }
-    
-    // Method 3: Try codeeditors (Editor tabs)
-    if (!foundData) {
-        const codeEditors = dataTransfer.getData('codeeditors');
-        if (codeEditors && codeEditors.trim()) {
-            console.log('[Webview] Code editors data found:', codeEditors);
-            try {
-                // Try to parse as JSON in case it contains structured data
-                const editorData = JSON.parse(codeEditors);
-                if (editorData && editorData.resource) {
-                    vscode.postMessage({
-                        type: 'filesDropped',
-                        source: 'vscode-editor-tab',
-                        uris: [editorData.resource]
-                    });
-                    foundData = true;
-                } else if (Array.isArray(editorData)) {
-                    const uris = editorData.map(item => item.resource).filter(Boolean);
-                    if (uris.length > 0) {
-                        vscode.postMessage({
-                            type: 'filesDropped',
-                            source: 'vscode-editor-tab',
-                            uris: uris
-                        });
-                        foundData = true;
-                    }
-                }
-            } catch {
-                // If not JSON, treat as plain text URI
-                if (codeEditors.startsWith('file://') || codeEditors.includes('/')) {
-                    vscode.postMessage({
-                        type: 'filesDropped',
-                        source: 'vscode-editor-tab',
-                        uris: [codeEditors]
-                    });
-                    foundData = true;
-                }
-            }
+    } catch {
+        // If not JSON, treat as plain text URI
+        if (isValidFilePath(data)) {
+            sendMessage({
+                type: 'filesDropped',
+                source: 'vscode-editor-tab',
+                uris: [data]
+            });
+            return true;
         }
     }
-    
-    // Method 4: Try text/uri-list (VS Code Explorer files)
-    if (!foundData) {
-        const uriList = dataTransfer.getData('text/uri-list');
-        if (uriList && uriList.trim()) {
-            console.log('[Webview] URI list found:', uriList);
-            const uris = uriList.split(/[\r\n]+/).filter(uri => uri.trim());
-            if (uris.length > 0) {
-                vscode.postMessage({
-                    type: 'filesDropped',
-                    source: 'vscode-explorer',
-                    uris: uris
-                });
-                foundData = true;
-            }
-        }
-    }
-    
-    // Method 5: Try text/plain (Sometimes used as fallback)
-    if (!foundData) {
-        const plainText = dataTransfer.getData('text/plain');
-        if (plainText && plainText.trim()) {
-            console.log('[Webview] Plain text found:', plainText);
-            
-            // Check if it's a file URI or path
-            if (plainText.startsWith('file://') || plainText.includes('/')) {
-                vscode.postMessage({
-                    type: 'filesDropped',
-                    source: 'vscode-editor-tab',
-                    uris: [plainText]
-                });
-                foundData = true;
-            } else {
-                // It's just text content
-                vscode.postMessage({
-                    type: 'textDropped',
-                    text: plainText
-                });
-                foundData = true;
-            }
-        }
-    }
-    
-    // Method 6: Check for actual File objects (OS drops - limited in webviews)
-    if (!foundData && dataTransfer.files.length > 0) {
-        console.log('[Webview] OS files detected (limited support)');
-        const filePaths = Array.from(dataTransfer.files).map(file => file.name);
-        vscode.postMessage({
-            type: 'filesDropped',
-            source: 'os-files',
-            files: filePaths
-        });
-        foundData = true;
-    }
-    
-    if (!foundData) {
-        console.log('[Webview] No supported drop data found');
-        console.log('[Webview] Available types:', Array.from(dataTransfer.types));
-        
-        // Log each type's content for debugging
-        for (const type of dataTransfer.types) {
-            const data = dataTransfer.getData(type);
-            console.log('[Webview] Type "' + type + '":', data);
-        }
-        
-        vscode.postMessage({
-            type: 'dropFailed',
-            message: 'No supported files found. Available types: ' + Array.from(dataTransfer.types).join(', ')
-        });
-    }
-});
+    return false;
+}
 
-function renderMessages() {
-    const container = document.getElementById('chatContainer');
-    container.innerHTML = '<div class="drop-indicator" id="dropIndicator">📁 Drop files here to attach them</div>';
+/**
+ * Process standard URI list format (VS Code Explorer files)
+ * 
+ * @param {DataTransfer} dataTransfer - The drop event's data transfer object
+ * @returns {boolean} True if data was processed successfully
+ */
+function processUriList(dataTransfer) {
+    const data = dataTransfer.getData('text/uri-list');
+    if (!data?.trim()) return false;
     
-    messages.forEach(message => {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message ' + (message.sender === 'user' ? 'user-message' : 'assistant-message');
-        
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'message-content';
-        contentDiv.innerHTML = formatMessageContent(message.content);
-        messageDiv.appendChild(contentDiv);
-        
-        if (message.fileReference) {
-            const fileDiv = document.createElement('div');
-            fileDiv.className = 'file-attachment';
-            fileDiv.innerHTML = '📎 ' + message.fileReference.fileName;
-            messageDiv.appendChild(fileDiv);
-        }
-        
-        container.appendChild(messageDiv);
+    console.log('[Webview] URI list found:', data);
+    const uris = data.split(/[\r\n]+/).filter(uri => uri.trim());
+    
+    if (uris.length > 0) {
+        sendMessage({
+            type: 'filesDropped',
+            source: 'vscode-explorer',
+            uris: uris
+        });
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Process plain text format (fallback for various sources)
+ * Distinguishes between file paths and actual text content
+ * 
+ * @param {DataTransfer} dataTransfer - The drop event's data transfer object
+ * @returns {boolean} True if data was processed successfully
+ */
+function processPlainText(dataTransfer) {
+    const data = dataTransfer.getData('text/plain');
+    if (!data?.trim()) return false;
+    
+    console.log('[Webview] Plain text found:', data);
+    
+    if (isValidFilePath(data)) {
+        sendMessage({
+            type: 'filesDropped',
+            source: 'vscode-editor-tab',
+            uris: [data]
+        });
+        return true;
+    } else {
+        // It's just text content
+        sendMessage({
+            type: 'textDropped',
+            text: data
+        });
+        return true;
+    }
+}
+
+/**
+ * Process OS file objects (limited support in webviews)
+ * 
+ * @param {DataTransfer} dataTransfer - The drop event's data transfer object
+ * @returns {boolean} True if data was processed successfully
+ */
+function processOSFiles(dataTransfer) {
+    if (dataTransfer.files.length === 0) return false;
+    
+    console.log('[Webview] OS files detected (limited support)');
+    const filePaths = Array.from(dataTransfer.files).map(file => file.name);
+    
+    sendMessage({
+        type: 'filesDropped',
+        source: 'os-files',
+        files: filePaths
+    });
+    return true;
+}
+
+/**
+ * Handle cases where no supported drop data was found
+ * Logs debugging information and notifies the extension
+ * 
+ * @param {DataTransfer} dataTransfer - The drop event's data transfer object
+ */
+function handleDropFailure(dataTransfer) {
+    console.log('[Webview] No supported drop data found');
+    
+    // Log each type's content for debugging
+    const typeInfo = Array.from(dataTransfer.types).map(type => {
+        const data = dataTransfer.getData(type);
+        console.log(`[Webview] Type "${type}":`, data);
+        return `${type}: ${data ? data.substring(0, 50) + '...' : 'empty'}`;
     });
     
-    container.scrollTop = container.scrollHeight;
+    sendMessage({
+        type: 'dropFailed',
+        message: `No supported files found. Available types: ${dataTransfer.types.join(', ')}`,
+        debugInfo: typeInfo
+    });
 }
 
+/**
+ * Check if a string represents a valid file path or URI
+ * 
+ * @param {string} text - The text to validate
+ * @returns {boolean} True if the text appears to be a file path
+ */
+function isValidFilePath(text) {
+    return text.startsWith('file://') || text.includes('/') || text.match(/^[a-zA-Z]:\\/);
+}
+
+/**
+ * Render all messages in the chat container
+ * Updates the DOM with current message history and maintains scroll position
+ */
+function renderMessages() {
+    chatContainer.innerHTML = '<div class="drop-indicator" id="dropIndicator">📁 Drop files here to attach them</div>';
+    
+    // Re-cache the drop indicator after innerHTML reset
+    dropIndicator = document.getElementById('dropIndicator');
+    
+    messages.forEach(message => {
+        const messageDiv = createMessageElement(message);
+        chatContainer.appendChild(messageDiv);
+    });
+    
+    // Auto-scroll to bottom to show latest message
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+/**
+ * Create a DOM element for a single message
+ * 
+ * @param {Object} message - The message object to render
+ * @param {string} message.sender - Either 'user' or 'assistant'
+ * @param {string} message.content - The message text content
+ * @param {Object} [message.fileReference] - Optional file attachment info
+ * @returns {HTMLElement} The created message element
+ */
+function createMessageElement(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${message.sender === 'user' ? 'user-message' : 'assistant-message'}`;
+    
+    // Add message content
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    contentDiv.innerHTML = formatMessageContent(message.content);
+    messageDiv.appendChild(contentDiv);
+    
+    // Add file attachment if present
+    if (message.fileReference) {
+        const fileDiv = createFileAttachmentElement(message.fileReference);
+        messageDiv.appendChild(fileDiv);
+    }
+    
+    return messageDiv;
+}
+
+/**
+ * Create a DOM element for a file attachment
+ * 
+ * @param {Object} fileReference - The file reference object
+ * @param {string} fileReference.fileName - The name of the attached file
+ * @returns {HTMLElement} The created file attachment element
+ */
+function createFileAttachmentElement(fileReference) {
+    const fileDiv = document.createElement('div');
+    fileDiv.className = 'file-attachment';
+    fileDiv.innerHTML = `📎 ${fileReference.fileName}`;
+    return fileDiv;
+}
+
+/**
+ * Format message content with basic markdown-like styling
+ * Converts **bold**, *italic*, and newlines to HTML
+ * 
+ * @param {string} content - Raw message content
+ * @returns {string} HTML-formatted content
+ */
 function formatMessageContent(content) {
     return content
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/\n/g, '<br>');
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold text
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')              // Italic text
+        .replace(/\n/g, '<br>');                           // Line breaks
 }
 
-function sendMessage() {
-    const input = document.getElementById('messageInput');
-    const message = input.value.trim();
+/**
+ * Send a message to the chat (user input)
+ * Validates input and sends to extension for processing
+ */
+function sendUserMessage() {
+    const message = messageInput.value.trim();
     
     if (message) {
-        vscode.postMessage({
+        sendMessage({
             type: 'sendMessage',
             message: message
         });
-        input.value = '';
+        messageInput.value = '';
     }
 }
 
-// Event listeners
-document.getElementById('sendButton').addEventListener('click', sendMessage);
-document.getElementById('attachButton').addEventListener('click', () => {
-    vscode.postMessage({ type: 'attachFile' });
-});
+/**
+ * Send a message to the extension
+ * Wrapper function for vscode.postMessage with error handling
+ * 
+ * @param {Object} message - The message object to send
+ */
+function sendMessage(message) {
+    try {
+        vscode.postMessage(message);
+    } catch (error) {
+        console.error('[Webview] Error sending message:', error);
+    }
+}
 
-document.getElementById('messageInput').addEventListener('keydown', function(e) {
+/**
+ * Handle keyboard events in the message input
+ * Sends message on Enter (without Shift) and allows multi-line with Shift+Enter
+ * 
+ * @param {KeyboardEvent} e - The keyboard event
+ */
+function handleMessageInputKeydown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendMessage();
+        sendUserMessage();
     }
-});
+}
 
-// Listen for messages from extension
-window.addEventListener('message', event => {
+/**
+ * Handle attach file button click
+ * Requests the extension to open file picker
+ */
+function handleAttachButtonClick() {
+    sendMessage({ type: 'attachFile' });
+}
+
+/**
+ * Listen for messages from the extension
+ * Handles updates to the message list and other extension communications
+ * 
+ * @param {MessageEvent} event - The message event from the extension
+ */
+function handleExtensionMessage(event) {
     const message = event.data;
+    
     switch (message.type) {
         case 'updateMessages':
             messages = message.messages;
             renderMessages();
             break;
+        default:
+            console.log('[Webview] Unknown message type:', message.type);
     }
-});
+}
 
-// Initial render
-renderMessages();
+/**
+ * Initialize the chat interface
+ * Sets up event listeners and renders initial state
+ */
+function initializeChat() {
+    // Cache DOM references
+    initializeDOMReferences();
+    
+    // Set up drag and drop event listeners
+    document.addEventListener('dragover', handleDragOver);
+    document.addEventListener('dragleave', handleDragLeave);
+    document.addEventListener('drop', handleDrop);
+    
+    // Set up UI event listeners
+    sendButton.addEventListener('click', sendUserMessage);
+    attachButton.addEventListener('click', handleAttachButtonClick);
+    messageInput.addEventListener('keydown', handleMessageInputKeydown);
+    
+    // Set up extension message listener
+    window.addEventListener('message', handleExtensionMessage);
+    
+    // Initial render
+    renderMessages();
+    
+    console.log('[Webview] Chat interface initialized');
+}
+
+// Initialize when the page loads
+document.addEventListener('DOMContentLoaded', initializeChat);
