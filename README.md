@@ -5,12 +5,14 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 ## ✨ Features
 
 ### 🎯 Intelligent Chat Interface
+
 - **AI-Powered Responses** - Contextual assistance for code review, debugging, and explanations
 - **Real-time Messaging** - Instant chat interface with message history
 - **File Context Awareness** - Analyzes attached files to provide targeted insights
 - **Markdown Support** - Rich text formatting in messages
 
 ### 📁 Advanced File Attachment
+
 - **Drag & Drop from VS Code Explorer** - Seamlessly drag files from the file explorer
 - **Editor Tab Integration** - Drop files directly from open editor tabs
 - **Multi-file Support** - Attach multiple files and folders simultaneously
@@ -19,6 +21,7 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 - **Code Selection Support** - Attach only selected code snippets
 
 ### 🔍 Code Analysis Engine
+
 - **Multi-Language Support** - Recognizes 20+ programming languages
 - **Function Detection** - Automatically identifies functions and methods
 - **Class Extraction** - Finds classes, interfaces, and type definitions
@@ -26,6 +29,7 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 - **File Statistics** - Provides line counts, file sizes, and metadata
 
 ### 🎨 Enhanced User Experience
+
 - **VS Code Theme Integration** - Seamlessly adapts to your theme
 - **Visual Drop Feedback** - Clear indicators when dragging files
 - **Tree View Integration** - Organized view of chat history and attached files
@@ -37,6 +41,7 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 ### From Source (Development)
 
 1. **Clone and Setup**
+
    ```bash
    git clone <repository-url>
    cd chat-ide
@@ -44,6 +49,7 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
    ```
 
 2. **Compile the Extension**
+
    ```bash
    npm run compile
    ```
@@ -56,6 +62,7 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 ### Package Installation
 
 1. **Build Package**
+
    ```bash
    npm install -g vsce
    vsce package
@@ -72,6 +79,7 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 ### Getting Started
 
 1. **Open the AI Assistant**
+
    - Click the robot icon (🤖) in the Activity Bar
    - Or use Command Palette: `AI Assistant: Open Chat`
 
@@ -82,26 +90,32 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 ### File Attachment Methods
 
 #### 1. Drag & Drop from Explorer
+
 ```
 VS Code Explorer → Drag file(s) → Drop into chat area
 ```
+
 - Supports individual files and folders
 - Automatically processes multiple files
 - Shows visual feedback during drag operations
 
 #### 2. Editor Tab Drag & Drop
+
 ```
 Open Editor Tab → Drag tab → Drop into chat area
 ```
+
 - Works with any open file tab
 - Maintains file context and language detection
 
 #### 3. Toolbar Buttons
+
 - **📎** Attach current active file
 - **📁** Browse and select files
 - **✂️** Attach selected text (when text is selected)
 
 #### 4. Context Menus
+
 - **Explorer**: Right-click file → "Attach to AI Chat"
 - **Editor**: Right-click → "Attach to AI Chat"
 
@@ -120,23 +134,23 @@ Access via Command Palette (`Ctrl+Shift+P`):
 
 The extension recognizes and analyzes these programming languages:
 
-| Language | Extensions | Analysis Support |
-|----------|------------|------------------|
-| JavaScript | `.js`, `.jsx` | Functions, classes, imports |
-| TypeScript | `.ts`, `.tsx` | Functions, classes, interfaces, types |
-| Python | `.py` | Functions, classes, imports |
-| Java | `.java` | Classes, methods, imports |
-| C/C++ | `.c`, `.cpp` | Functions, includes |
-| C# | `.cs` | Classes, methods, using statements |
-| PHP | `.php` | Functions, classes |
-| Ruby | `.rb` | Methods, classes |
-| Go | `.go` | Functions, structs, imports |
-| Rust | `.rs` | Functions, structs, use statements |
-| HTML | `.html` | Basic structure |
-| CSS/SCSS | `.css`, `.scss`, `.sass` | Rules and selectors |
-| JSON | `.json` | Structure validation |
-| Markdown | `.md` | Content analysis |
-| YAML | `.yaml`, `.yml` | Structure analysis |
+| Language   | Extensions               | Analysis Support                      |
+| ---------- | ------------------------ | ------------------------------------- |
+| JavaScript | `.js`, `.jsx`            | Functions, classes, imports           |
+| TypeScript | `.ts`, `.tsx`            | Functions, classes, interfaces, types |
+| Python     | `.py`                    | Functions, classes, imports           |
+| Java       | `.java`                  | Classes, methods, imports             |
+| C/C++      | `.c`, `.cpp`             | Functions, includes                   |
+| C#         | `.cs`                    | Classes, methods, using statements    |
+| PHP        | `.php`                   | Functions, classes                    |
+| Ruby       | `.rb`                    | Methods, classes                      |
+| Go         | `.go`                    | Functions, structs, imports           |
+| Rust       | `.rs`                    | Functions, structs, use statements    |
+| HTML       | `.html`                  | Basic structure                       |
+| CSS/SCSS   | `.css`, `.scss`, `.sass` | Rules and selectors                   |
+| JSON       | `.json`                  | Structure validation                  |
+| Markdown   | `.md`                    | Content analysis                      |
+| YAML       | `.yaml`, `.yml`          | Structure analysis                    |
 
 ## 🎯 Key Features in Detail
 
@@ -179,6 +193,7 @@ The AI assistant provides contextual responses based on:
 ### Performance Optimization
 
 The extension is optimized for:
+
 - **Memory efficiency** - Caches DOM elements and processes files incrementally
 - **Fast response times** - Asynchronous file processing
 - **Minimal resource usage** - Efficient event handling and cleanup
@@ -188,22 +203,28 @@ The extension is optimized for:
 ### Common Issues
 
 #### Files Not Attaching
+
 **Problem**: Drag and drop doesn't work
 **Solutions**:
+
 - Ensure files are under 1MB (for external files)
 - Try using the file browser button instead
 - Check VS Code Developer Console for errors
 
 #### Chat Interface Not Loading
+
 **Problem**: Webview shows error or doesn't appear
 **Solutions**:
+
 - Reload VS Code window (`Ctrl+R`)
 - Check that all webview files exist in the extension
 - Use Command Palette to open chat
 
 #### Extension Not Activating
+
 **Problem**: Robot icon doesn't appear in Activity Bar
 **Solutions**:
+
 - Ensure extension is properly compiled (`npm run compile`)
 - Check for TypeScript compilation errors
 - Restart VS Code
@@ -211,10 +232,12 @@ The extension is optimized for:
 ### Debug Mode
 
 1. **Open Developer Tools**
+
    - Help → Toggle Developer Tools
    - Check Console tab for extension logs
 
 2. **Enable Verbose Logging**
+
    - Look for messages prefixed with `[Extension]`, `[ChatProvider]`, or `[Webview]`
 
 3. **Common Log Messages**
@@ -227,6 +250,7 @@ The extension is optimized for:
 ## 🔄 Development
 
 ### Project Structure
+
 ```
 src/
 ├── extension.ts          # Main extension entry point
@@ -240,11 +264,13 @@ src/
 ### Building and Testing
 
 1. **Install Dependencies**
+
    ```bash
    npm install
    ```
 
 2. **Compile TypeScript**
+
    ```bash
    npm run compile
    # Or for continuous compilation:
@@ -252,6 +278,7 @@ src/
    ```
 
 3. **Test Extension**
+
    - Press `F5` in VS Code to launch Extension Development Host
    - Test all features in the new window
 
@@ -278,6 +305,7 @@ src/
 ## 📝 Version History
 
 ### v1.0.0 (Current)
+
 - ✅ Complete drag-and-drop implementation
 - ✅ Multi-language code analysis
 - ✅ VS Code Explorer integration
@@ -297,4 +325,4 @@ This project is licensed under the MIT License. See the LICENSE file for details
 
 **Transform your coding workflow with intelligent AI assistance! 🤖✨**
 
-*For detailed technical documentation and implementation details, see [DOCUMENTATION.md](./DOCUMENTATION.md)*
+_For detailed technical documentation and implementation details, see [DOCUMENTATION.md](./DOCUMENTATION.md)_

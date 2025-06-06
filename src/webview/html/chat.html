@@ -1,28 +1,36 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Code Assistant</title>
-    <link rel="stylesheet" href="{{cssPath}}">
-</head>
-<body>
+    <link rel="stylesheet" href="{{cssPath}}" />
+  </head>
+  <body>
     <div class="shift-notice">
-        ⚠️ Hold <strong>Shift</strong> while dragging files from Explorer to drop them here
+      ⚠️ Hold <strong>Shift</strong> while dragging files from Explorer to drop
+      them here
     </div>
-    
+
     <div class="chat-container" id="chatContainer">
-        <div class="drop-indicator" id="dropIndicator">
-            📁 Drop files here to attach them
-        </div>
+      <div class="drop-indicator" id="dropIndicator">
+        📁 Drop files here to attach them
+      </div>
     </div>
-    
+
     <div class="input-container">
-        <textarea id="messageInput" class="message-input" placeholder="Type your message..." rows="1"></textarea>
-        <button id="attachButton" class="attach-button" title="Attach File">📎</button>
-        <button id="sendButton" class="send-button">Send</button>
+      <textarea
+        id="messageInput"
+        class="message-input"
+        placeholder="Type your message..."
+        rows="1"
+      ></textarea>
+      <button id="attachButton" class="attach-button" title="Attach File">
+        📎
+      </button>
+      <button id="sendButton" class="send-button">Send</button>
     </div>
 
     <script src="{{scriptPath}}"></script>
-</body>
+  </body>
 </html>
