@@ -618,5 +618,4 @@ vsce package
 
 ---
 
-*This documentation is generated for AI Code Assistant Extension v1.0.0*
 *Last updated: June 6, 2025*

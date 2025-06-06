@@ -1,200 +1,300 @@
-# AI Code Assistant - Enhanced Drag & Drop Extension
+# AI Code Assistant - VS Code Extension
 
-A powerful VS Code extension that provides GitHub Copilot Chat-like functionality with comprehensive drag-and-drop support for seamless code interaction.
+A powerful VS Code extension that provides an intelligent chat interface with advanced drag-and-drop file attachment capabilities for seamless code analysis and developer assistance.
 
-## 🚀 Features
+## ✨ Features
 
-### Enhanced Drag & Drop Capabilities
-- **File Explorer Integration** - Drag files directly from VS Code's file explorer
-- **External File Support** - Drop files from your operating system's file manager
-- **Multi-file Selection** - Attach multiple files at once
-- **Smart Content Detection** - Automatic language detection and syntax highlighting
-- **Visual Feedback** - Animated drop zones and progress indicators
+### 🎯 Intelligent Chat Interface
+- **AI-Powered Responses** - Contextual assistance for code review, debugging, and explanations
+- **Real-time Messaging** - Instant chat interface with message history
+- **File Context Awareness** - Analyzes attached files to provide targeted insights
+- **Markdown Support** - Rich text formatting in messages
 
-### Smart Context Management
-- **Active File Attachment** - Quick attach currently open file
-- **Selection Support** - Attach only selected code snippets
-- **Smart Context Discovery** - Automatically find related files
-- **File Statistics** - Line counts, language detection, and file size info
+### 📁 Advanced File Attachment
+- **Drag & Drop from VS Code Explorer** - Seamlessly drag files from the file explorer
+- **Editor Tab Integration** - Drop files directly from open editor tabs
+- **Multi-file Support** - Attach multiple files and folders simultaneously
+- **Smart File Browser** - Built-in file picker with language-specific filters
+- **Active File Quick Attach** - One-click attachment of currently open files
+- **Code Selection Support** - Attach only selected code snippets
 
-### Interactive Chat Interface
-- **Real-time Messaging** - Instant AI responses with typing indicators
-- **File Previews** - Embedded file content with syntax highlighting
-- **Keyboard Shortcuts** - Efficient workflow with hotkeys
-- **Theme Integration** - Seamless VS Code theme support
+### 🔍 Code Analysis Engine
+- **Multi-Language Support** - Recognizes 20+ programming languages
+- **Function Detection** - Automatically identifies functions and methods
+- **Class Extraction** - Finds classes, interfaces, and type definitions
+- **Import Analysis** - Tracks dependencies and module imports
+- **File Statistics** - Provides line counts, file sizes, and metadata
 
-## 🎯 Installation & Setup
+### 🎨 Enhanced User Experience
+- **VS Code Theme Integration** - Seamlessly adapts to your theme
+- **Visual Drop Feedback** - Clear indicators when dragging files
+- **Tree View Integration** - Organized view of chat history and attached files
+- **Command Palette Integration** - Quick access via Command Palette
+- **Status Bar Integration** - Easy access from the status bar
 
-1. **Compile the Extension**
+## 🚀 Installation
+
+### From Source (Development)
+
+1. **Clone and Setup**
+   ```bash
+   git clone <repository-url>
+   cd chat-ide
+   npm install
+   ```
+
+2. **Compile the Extension**
    ```bash
    npm run compile
    ```
 
-2. **Open in VS Code**
+3. **Launch Development Environment**
+   - Open the project in VS Code
    - Press `F5` to launch Extension Development Host
-   - Or package with `vsce package` and install the .vsix file
+   - The extension will be available in the new VS Code window
 
-3. **Activate the Extension**
-   - Look for the robot icon (🤖) in the Activity Bar
-   - Or use `Ctrl+Shift+A` to open the chat
+### Package Installation
+
+1. **Build Package**
+   ```bash
+   npm install -g vsce
+   vsce package
+   ```
+
+2. **Install Extension**
+   - Open VS Code
+   - Go to Extensions view (`Ctrl+Shift+X`)
+   - Click "..." → "Install from VSIX"
+   - Select the generated `.vsix` file
 
 ## 📖 Usage Guide
 
-### Opening the Chat
-- **Activity Bar**: Click the robot icon (🤖)
-- **Keyboard**: `Ctrl+Shift+A` (Windows/Linux) or `Cmd+Shift+A` (Mac)
-- **Command Palette**: "Open AI Assistant"
+### Getting Started
 
-### Drag & Drop Methods
+1. **Open the AI Assistant**
+   - Click the robot icon (🤖) in the Activity Bar
+   - Or use Command Palette: `AI Assistant: Open Chat`
 
-#### 1. From File Explorer
-- Drag any file from VS Code's Explorer panel directly into the chat
-- Multiple files can be selected and dragged together
-- Folders will show a context menu to attach all files
+2. **Start Chatting**
+   - Type your questions or requests in the input field
+   - Press `Enter` to send (or `Shift+Enter` for new line)
 
-#### 2. From External File Manager
-- Drag files from Windows Explorer, macOS Finder, or Linux file managers
-- Supports files up to 1MB in size
-- Automatic language detection based on file extensions
+### File Attachment Methods
 
-#### 3. Using Toolbar Buttons
-- **📎 Attach Active File** - Add currently open file
-- **📁 Browse Files** - File picker dialog
-- **✂️ Attach Selection** - Add selected code only
-- **🧠 Smart Context** - Auto-discover related files
+#### 1. Drag & Drop from Explorer
+```
+VS Code Explorer → Drag file(s) → Drop into chat area
+```
+- Supports individual files and folders
+- Automatically processes multiple files
+- Shows visual feedback during drag operations
 
-### Keyboard Shortcuts
-- `Ctrl+Shift+A` - Open AI Assistant
-- `Ctrl+Shift+F` - Attach Active File
-- `Ctrl+Shift+S` - Attach Selection (when text is selected)
-- `Ctrl+Shift+M` - Attach Multiple Files
-- `Ctrl+Enter` - Send message in chat
+#### 2. Editor Tab Drag & Drop
+```
+Open Editor Tab → Drag tab → Drop into chat area
+```
+- Works with any open file tab
+- Maintains file context and language detection
 
-### Context Menu Integration
-- **Explorer**: Right-click files/folders → "Attach to AI Chat"
-- **Editor**: Right-click → "Attach Active File" or "Attach Selection"
-- **Editor Tab**: Right-click tab → "Attach Active File"
+#### 3. Toolbar Buttons
+- **📎** Attach current active file
+- **📁** Browse and select files
+- **✂️** Attach selected text (when text is selected)
 
-## 🔧 Supported File Types
+#### 4. Context Menus
+- **Explorer**: Right-click file → "Attach to AI Chat"
+- **Editor**: Right-click → "Attach to AI Chat"
 
-| Extension | Language | Support |
-|-----------|----------|---------|
-| .js, .jsx | JavaScript | ✅ Full |
-| .ts, .tsx | TypeScript | ✅ Full |
-| .py | Python | ✅ Full |
-| .html | HTML | ✅ Full |
-| .css, .scss | CSS/SCSS | ✅ Full |
-| .json | JSON | ✅ Full |
-| .md | Markdown | ✅ Full |
-| .txt | Plain Text | ✅ Full |
-| .xml, .yml | Config Files | ✅ Basic |
+### Available Commands
 
-## 🎨 Visual Features
+Access via Command Palette (`Ctrl+Shift+P`):
 
-### Drop Zone Animation
-- Appears when dragging files over the chat
-- Smooth fade-in/out transitions
-- Clear visual feedback for successful drops
+- `AI Assistant: Open Chat` - Open the chat interface
+- `AI Assistant: Attach Active File` - Attach currently open file
+- `AI Assistant: Attach Selection` - Attach selected code
+- `AI Assistant: Browse Files` - Open file picker
+- `AI Assistant: Clear Chat` - Clear chat history
+- `AI Assistant: New Chat` - Start fresh conversation
 
-### File Previews
-- Syntax-highlighted code snippets
-- File metadata (language, line count, size)
-- Collapsible content for large files
-- Smart truncation with "..." indicators
+## 🔧 Supported Languages
 
-### Responsive Design
-- Adapts to VS Code themes (dark/light)
-- Auto-resizing message input
-- Scrollable chat history
-- Mobile-friendly touch interactions
+The extension recognizes and analyzes these programming languages:
 
-## 🛠️ Advanced Configuration
+| Language | Extensions | Analysis Support |
+|----------|------------|------------------|
+| JavaScript | `.js`, `.jsx` | Functions, classes, imports |
+| TypeScript | `.ts`, `.tsx` | Functions, classes, interfaces, types |
+| Python | `.py` | Functions, classes, imports |
+| Java | `.java` | Classes, methods, imports |
+| C/C++ | `.c`, `.cpp` | Functions, includes |
+| C# | `.cs` | Classes, methods, using statements |
+| PHP | `.php` | Functions, classes |
+| Ruby | `.rb` | Methods, classes |
+| Go | `.go` | Functions, structs, imports |
+| Rust | `.rs` | Functions, structs, use statements |
+| HTML | `.html` | Basic structure |
+| CSS/SCSS | `.css`, `.scss`, `.sass` | Rules and selectors |
+| JSON | `.json` | Structure validation |
+| Markdown | `.md` | Content analysis |
+| YAML | `.yaml`, `.yml` | Structure analysis |
 
-### File Size Limits
-- External files: 1MB maximum
-- Internal VS Code files: No limit (handled by VS Code)
-- Large files are automatically truncated in previews
+## 🎯 Key Features in Detail
 
-### Language Detection
-The extension automatically detects programming languages based on file extensions and applies appropriate syntax highlighting.
+### Intelligent Code Analysis
 
-### Smart Context Discovery
-When using "Smart Context", the extension analyzes:
-- Import/export statements
-- File references
-- Project structure
-- Related files in the same directory
+When you attach a file, the extension automatically:
+
+1. **Detects Language** - Based on file extension and content
+2. **Extracts Functions** - Identifies all function definitions
+3. **Finds Classes** - Locates class and interface declarations
+4. **Analyzes Imports** - Maps dependencies and modules
+5. **Generates Summary** - Provides file statistics and insights
+
+### Advanced Drag & Drop
+
+The extension handles multiple drag sources:
+
+- **VS Code Explorer files** - Standard file tree navigation
+- **Editor tabs** - Direct from open file tabs
+- **External files** - From OS file managers (limited to 1MB)
+- **Folders** - Processes all contained files (up to 10 files)
+
+### Smart Response Generation
+
+The AI assistant provides contextual responses based on:
+
+- **File content** - Analyzes code structure and patterns
+- **User questions** - Tailors responses to specific queries
+- **Code context** - Understands relationships between files
+- **Best practices** - Suggests improvements and optimizations
+
+## 🛠️ Configuration
+
+### File Processing Limits
+
+- **Maximum file size**: 1MB for external files
+- **Folder processing**: Up to 10 files per folder
+- **Supported encodings**: UTF-8 text files
+
+### Performance Optimization
+
+The extension is optimized for:
+- **Memory efficiency** - Caches DOM elements and processes files incrementally
+- **Fast response times** - Asynchronous file processing
+- **Minimal resource usage** - Efficient event handling and cleanup
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-**Files not dropping properly:**
-- Ensure files are under 1MB for external drops
-- Check that the file format is supported
-- Try using the toolbar buttons as an alternative
+#### Files Not Attaching
+**Problem**: Drag and drop doesn't work
+**Solutions**:
+- Ensure files are under 1MB (for external files)
+- Try using the file browser button instead
+- Check VS Code Developer Console for errors
 
-**Chat not opening:**
+#### Chat Interface Not Loading
+**Problem**: Webview shows error or doesn't appear
+**Solutions**:
 - Reload VS Code window (`Ctrl+R`)
-- Check that the extension is activated
-- Use Command Palette: "Open AI Assistant"
+- Check that all webview files exist in the extension
+- Use Command Palette to open chat
 
-**Keyboard shortcuts not working:**
-- Check for conflicting keybindings in VS Code settings
-- Use the Command Palette as an alternative
+#### Extension Not Activating
+**Problem**: Robot icon doesn't appear in Activity Bar
+**Solutions**:
+- Ensure extension is properly compiled (`npm run compile`)
+- Check for TypeScript compilation errors
+- Restart VS Code
 
 ### Debug Mode
-Enable detailed logging in VS Code Developer Tools:
-1. Help → Toggle Developer Tools
-2. Check Console for extension logs
-3. Look for messages starting with "AI Assistant:"
+
+1. **Open Developer Tools**
+   - Help → Toggle Developer Tools
+   - Check Console tab for extension logs
+
+2. **Enable Verbose Logging**
+   - Look for messages prefixed with `[Extension]`, `[ChatProvider]`, or `[Webview]`
+
+3. **Common Log Messages**
+   ```
+   [Extension] Activating AI Code Assistant...
+   [ChatProvider] Processing dropped file: filename.js
+   [Webview] Drop event triggered
+   ```
 
 ## 🔄 Development
 
-### Building from Source
-```bash
-# Install dependencies
-npm install
-
-# Compile TypeScript
-npm run compile
-
-# Watch for changes
-npm run watch
-
-# Package extension
-vsce package
+### Project Structure
+```
+src/
+├── extension.ts          # Main extension entry point
+├── chatProvider.ts       # Core chat and file processing logic
+└── webview/
+    ├── html/chat.html   # Chat interface template
+    ├── css/chat.css     # Styling and themes
+    └── js/chat.js       # Client-side interaction logic
 ```
 
-### Testing
-1. Open the Extension Development Host (`F5`)
-2. Create test files in the workspace
-3. Test drag-and-drop from various sources
-4. Verify chat functionality and file attachments
+### Building and Testing
 
-## 📝 Changelog
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
 
-### v0.0.1 (Current)
-- ✅ Complete drag-and-drop implementation
-- ✅ Multi-source file support (Explorer, external, selection)
-- ✅ Visual feedback and animations
-- ✅ Comprehensive keyboard shortcuts
-- ✅ Context menu integration
-- ✅ Smart file detection and previews
-- ✅ VS Code theme integration
+2. **Compile TypeScript**
+   ```bash
+   npm run compile
+   # Or for continuous compilation:
+   npm run watch
+   ```
 
-## 🤝 Contributing
+3. **Test Extension**
+   - Press `F5` in VS Code to launch Extension Development Host
+   - Test all features in the new window
+
+4. **Package Extension**
+   ```bash
+   vsce package
+   ```
+
+### Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and test thoroughly
+4. Ensure code follows existing patterns and documentation
+5. Submit a pull request with detailed description
+
+## 📚 Additional Resources
+
+- **Technical Documentation**: See `DOCUMENTATION.md` for detailed implementation details
+- **Architecture Overview**: Complete system design and component interactions
+- **API Reference**: Function and class documentation
+- **Troubleshooting Guide**: Extended debugging and issue resolution
+
+## 📝 Version History
+
+### v1.0.0 (Current)
+- ✅ Complete drag-and-drop implementation
+- ✅ Multi-language code analysis
+- ✅ VS Code Explorer integration
+- ✅ Editor tab drag support
+- ✅ File browser with filters
+- ✅ Code selection attachment
+- ✅ Context menu integration
+- ✅ Tree view for chat history
+- ✅ Comprehensive documentation
+- ✅ Performance optimizations
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License. See the LICENSE file for details.
 
 ---
 
-**Enjoy coding with your new AI assistant! 🤖✨**
+**Transform your coding workflow with intelligent AI assistance! 🤖✨**
+
+*For detailed technical documentation and implementation details, see [DOCUMENTATION.md](./DOCUMENTATION.md)*
