@@ -4,9 +4,8 @@
  * Main extension entry point that handles:
  * - Extension activation and deactivation
  * - Command registration and handling
- * - Drag-and-drop providers setup
- * - File tree management
- * - Context menu integration
+ * - Provider registration and setup
+ * - Event listener configuration
  * 
  * @fileoverview Main extension implementation
  * @author AI Code Assistant Extension
@@ -15,304 +14,11 @@
 
 import * as vscode from 'vscode';
 import { ChatProvider } from './chatProvider';
-
-/**
- * Represents an item in the drop zone tree view
- */
-interface DropZoneItem {
-    label: string;
-    iconPath: string;
-    tooltip: string;
-}
-
-/**
- * Drop Zone Provider for handling drag-and-drop operations
- * Implements both TreeDataProvider and TreeDragAndDropController interfaces
- */
-class DropZoneProvider implements vscode.TreeDataProvider<DropZoneItem>, vscode.TreeDragAndDropController<DropZoneItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<DropZoneItem | undefined | null | void> = new vscode.EventEmitter<DropZoneItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<DropZoneItem | undefined | null | void> = this._onDidChangeTreeData.event;
-
-    // Drag and Drop configuration - supports multiple MIME types for maximum compatibility
-    dropMimeTypes = [
-        'text/uri-list', 
-        'application/vnd.code.tree.explorer', 
-        'application/vnd.code.tree.fileexplorer',
-        'application/vnd.code.editor.drop',
-        'application/vnd.code.tab.drop',
-        'text/plain',
-        'files'
-    ];
-    dragMimeTypes = ['text/uri-list'];
-
-    constructor(private chatProvider: ChatProvider) {}
-
-    /**
-     * Handles drop events in the drop zone
-     * Processes various data transfer formats and routes to chat provider
-     */
-    public async handleDrop(target: DropZoneItem | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
-        console.log('[DropZoneProvider] Drop detected');
-        
-        const availableTypes = this.getAvailableDataTypes(dataTransfer);
-        console.log('[DropZoneProvider] Available MIME types:', availableTypes);
-        
-        // Try to process data in order of preference
-        if (await this.processUriListData(dataTransfer) ||
-            await this.processPlainTextData(dataTransfer) ||
-            await this.processVSCodeTreeData(dataTransfer)) {
-            
-            vscode.window.showInformationMessage('✅ Files dropped successfully!');
-            return;
-        }
-        
-        // No supported data found
-        this.handleDropFailure(availableTypes);
-    }
-
-    /**
-     * Gets all available data types from the data transfer object
-     */
-    private getAvailableDataTypes(dataTransfer: vscode.DataTransfer): string[] {
-        const types: string[] = [];
-        for (const mimeType of this.dropMimeTypes) {
-            if (dataTransfer.get(mimeType)) {
-                types.push(mimeType);
-            }
-        }
-        return types;
-    }
-
-    /**
-     * Processes URI list data (primary method for most file drops)
-     */
-    private async processUriListData(dataTransfer: vscode.DataTransfer): Promise<boolean> {
-        const uriListData = dataTransfer.get('text/uri-list');
-        if (!uriListData) return false;
-        
-        const uriString = await uriListData.asString();
-        console.log('[DropZoneProvider] URI string:', uriString);
-        
-        if (!uriString?.trim()) return false;
-        
-        const uris = uriString.split(/[\r\n]+/).filter(uri => uri.trim().length > 0);
-        
-        for (const uriStr of uris) {
-            try {
-                const uri = vscode.Uri.parse(uriStr);
-                console.log('[DropZoneProvider] Processing URI:', uri.toString());
-                await this.chatProvider.handleDroppedUri(uri);
-            } catch (error) {
-                console.error('[DropZoneProvider] Error processing URI:', error);
-            }
-        }
-        
-        return uris.length > 0;
-    }
-
-    /**
-     * Processes plain text data (fallback for some editor tab drops)
-     */
-    private async processPlainTextData(dataTransfer: vscode.DataTransfer): Promise<boolean> {
-        const plainTextData = dataTransfer.get('text/plain');
-        if (!plainTextData) return false;
-        
-        const textContent = await plainTextData.asString();
-        console.log('[DropZoneProvider] Plain text content:', textContent);
-        
-        if (!textContent?.trim()) return false;
-        
-        // Check if it's a file URI or path
-        if (this.isFilePath(textContent)) {
-            try {
-                const uri = vscode.Uri.parse(textContent);
-                console.log('[DropZoneProvider] Processing plain text URI:', uri.toString());
-                await this.chatProvider.handleDroppedUri(uri);
-                return true;
-            } catch (error) {
-                console.error('[DropZoneProvider] Error processing plain text URI:', error);
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * Processes VS Code tree data (structured data from explorer/tabs)
-     */
-    private async processVSCodeTreeData(dataTransfer: vscode.DataTransfer): Promise<boolean> {
-        const treeDataTypes = [
-            'application/vnd.code.tree.explorer', 
-            'application/vnd.code.tree.fileexplorer', 
-            'application/vnd.code.editor.drop', 
-            'application/vnd.code.tab.drop'
-        ];
-        
-        for (const mimeType of treeDataTypes) {
-            const item = dataTransfer.get(mimeType);
-            if (!item) continue;
-            
-            console.log('[DropZoneProvider] Processing mime type:', mimeType);
-            const content = await item.asString();
-            console.log('[DropZoneProvider] Tree content:', content);
-            
-            if (await this.processTreeContent(content)) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * Processes tree content (JSON or plain text)
-     */
-    private async processTreeContent(content: string): Promise<boolean> {
-        if (!content?.trim()) return false;
-        
-        try {
-            // Try parsing as JSON
-            const data = JSON.parse(content);
-            
-            if (data.resource) {
-                const uri = vscode.Uri.parse(data.resource);
-                await this.chatProvider.handleDroppedUri(uri);
-                return true;
-            }
-            
-            if (Array.isArray(data)) {
-                for (const item of data) {
-                    if (item.resource) {
-                        const uri = vscode.Uri.parse(item.resource);
-                        await this.chatProvider.handleDroppedUri(uri);
-                    }
-                }
-                return data.length > 0;
-            }
-        } catch {
-            // If not JSON, try as plain URI
-            if (this.isFilePath(content)) {
-                const uri = vscode.Uri.parse(content);
-                await this.chatProvider.handleDroppedUri(uri);
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * Checks if a string represents a file path or URI
-     */
-    private isFilePath(text: string): boolean {
-        return text.startsWith('file://') || text.includes('/') || text.match(/^[a-zA-Z]:\\/) !== null;
-    }
-
-    /**
-     * Handles drop failure cases
-     */
-    private handleDropFailure(availableTypes: string[]): void {
-        console.log('[DropZoneProvider] No supported drop data found');
-        vscode.window.showWarningMessage(
-            `No supported files found in drop. Available types: ${availableTypes.join(', ')}`
-        );
-    }
-
-    /**
-     * Handles drag events (allows dragging items out)
-     */
-    public async handleDrag(source: readonly DropZoneItem[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
-        console.log('[DropZoneProvider] Drag initiated from drop zone');
-        // Could implement dragging out functionality if needed
-    }
-
-    // TreeDataProvider implementation
-    getTreeItem(element: DropZoneItem): vscode.TreeItem {
-        const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
-        item.iconPath = new vscode.ThemeIcon(element.iconPath);
-        item.tooltip = element.tooltip;
-        item.contextValue = 'dropZoneItem';
-        return item;
-    }
-
-    getChildren(element?: DropZoneItem): Thenable<DropZoneItem[]> {
-        if (!element) {
-            return Promise.resolve([
-                {
-                    label: '📁 Drop files here',
-                    iconPath: 'folder',
-                    tooltip: 'Drag and drop files from VS Code Explorer or your file system'
-                },
-                {
-                    label: '🎯 Supports multiple files',
-                    iconPath: 'files',
-                    tooltip: 'You can drag multiple files at once'
-                },
-                {
-                    label: '📂 Supports folders',
-                    iconPath: 'file-directory',
-                    tooltip: 'Drag folders to process all files inside'
-                }
-            ]);
-        }
-        return Promise.resolve([]);
-    }
-}
-
-/**
- * Simple TreeDataProvider for managing attached files in the UI
- */
-class FileTreeDataProvider implements vscode.TreeDataProvider<vscode.Uri> {
-    private _onDidChangeTreeData: vscode.EventEmitter<vscode.Uri | undefined | null | void> = new vscode.EventEmitter<vscode.Uri | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<vscode.Uri | undefined | null | void> = this._onDidChangeTreeData.event;
-
-    private activeFile: vscode.Uri | undefined;
-    private attachedFiles: Set<string> = new Set();
-
-    /**
-     * Sets the currently active file
-     */
-    setActiveFile(uri: vscode.Uri): void {
-        this.activeFile = uri;
-        this._onDidChangeTreeData.fire();
-    }
-
-    /**
-     * Adds a file to the attached files list
-     */
-    addAttachedFile(uri: vscode.Uri): void {
-        this.attachedFiles.add(uri.toString());
-        this._onDidChangeTreeData.fire();
-    }
-
-    /**
-     * Removes a file from the attached files list
-     */
-    removeAttachedFile(uri: vscode.Uri): void {
-        this.attachedFiles.delete(uri.toString());
-        this._onDidChangeTreeData.fire();
-    }
-
-    getTreeItem(element: vscode.Uri): vscode.TreeItem {
-        const item = new vscode.TreeItem(element, vscode.TreeItemCollapsibleState.None);
-        item.resourceUri = element;
-        item.contextValue = 'attachedFile';
-        item.command = {
-            command: 'vscode.open',
-            title: 'Open File',
-            arguments: [element]
-        };
-        return item;
-    }
-
-    getChildren(element?: vscode.Uri): Thenable<vscode.Uri[]> {
-        if (!element) {
-            const files = Array.from(this.attachedFiles).map(uriString => vscode.Uri.parse(uriString));
-            return Promise.resolve(files);
-        }
-        return Promise.resolve([]);
-    }
-}
+import { DropZoneProvider, FileTreeDataProvider } from './providers';
+import { FileManager, FileAttachmentManager } from './fileManager';
+import { OllamaService } from './ollamaService';
+import { ErrorUtils, FileUtils } from './utils';
+import { DEFAULT_CONFIG } from './types';
 
 /**
  * Extension activation function
@@ -322,27 +28,47 @@ export function activate(context: vscode.ExtensionContext) {
     console.log('[Extension] Activating AI Code Assistant...');
 
     try {
+        // Initialize services
+        const fileManager = new FileManager(DEFAULT_CONFIG);
+        const fileAttachmentManager = new FileAttachmentManager();
+        const ollamaService = new OllamaService();
+
         // Initialize core providers
-        const chatProvider = new ChatProvider(context.extensionUri);
-        const dropZoneProvider = new DropZoneProvider(chatProvider);
+        const chatProvider = new ChatProvider(
+            context.extensionUri, 
+            fileManager, 
+            fileAttachmentManager, 
+            ollamaService
+        );
+        
+        const dropZoneProvider = new DropZoneProvider(async (uri: vscode.Uri) => {
+            try {
+                const fileReferences = await fileManager.processDroppedUri(uri);
+                fileAttachmentManager.stageFiles(fileReferences);
+            } catch (error) {
+                ErrorUtils.logError('Extension.dropZoneCallback', error);
+                vscode.window.showErrorMessage(ErrorUtils.createUserFriendlyError(error));
+            }
+        });
+        
         const fileTreeDataProvider = new FileTreeDataProvider();
 
         // Register providers
         registerProviders(context, chatProvider, dropZoneProvider, fileTreeDataProvider);
         
         // Register commands
-        registerCommands(context, chatProvider, fileTreeDataProvider);
+        registerCommands(context, chatProvider, fileManager, fileAttachmentManager);
         
         // Set up event listeners
-        setupEventListeners(context, chatProvider, fileTreeDataProvider);
+        setupEventListeners(context, fileTreeDataProvider);
         
         // Create status bar item
         createStatusBarItem(context);
 
         console.log('[Extension] AI Code Assistant activated successfully!');
     } catch (error) {
-        console.error('[Extension] Error activating extension:', error);
-        vscode.window.showErrorMessage(`Failed to activate AI Code Assistant: ${error}`);
+        ErrorUtils.logError('Extension.activate', error);
+        vscode.window.showErrorMessage(`Failed to activate AI Code Assistant: ${ErrorUtils.createUserFriendlyError(error)}`);
     }
 }
 
@@ -388,47 +114,49 @@ function registerProviders(
  */
 function registerCommands(
     context: vscode.ExtensionContext, 
-    chatProvider: ChatProvider, 
-    fileTreeDataProvider: FileTreeDataProvider
+    chatProvider: ChatProvider,
+    fileManager: FileManager,
+    fileAttachmentManager: FileAttachmentManager
 ): void {
     const commands = [
         // Basic chat commands
         vscode.commands.registerCommand('ai-assistant.openChat', () => {
             vscode.commands.executeCommand('workbench.view.extension.ai-assistant');
-            chatProvider.reveal();
         }),
         
         vscode.commands.registerCommand('ai-assistant.clearChat', () => {
-            chatProvider.clearChat();
+            chatProvider.clearMessages();
+            vscode.window.showInformationMessage('Chat cleared');
         }),
         
         vscode.commands.registerCommand('ai-assistant.newChat', () => {
-            chatProvider.newChat();
+            chatProvider.clearMessages();
+            fileAttachmentManager.clearStagedFiles();
+            vscode.window.showInformationMessage('New chat started');
         }),
 
         // File attachment commands
         vscode.commands.registerCommand('ai-assistant.attachActiveFile', async () => {
-            await chatProvider.attachActiveFile();
+            await handleAttachActiveFile(fileManager, fileAttachmentManager);
         }),
 
         vscode.commands.registerCommand('ai-assistant.browseFiles', async () => {
-            await chatProvider.browseAndAttachFile();
+            await handleBrowseAndAttachFile(fileManager, fileAttachmentManager);
         }),
 
         vscode.commands.registerCommand('ai-assistant.attachSelection', async () => {
-            await chatProvider.attachSelectedText();
+            await handleAttachSelectedText(fileManager, fileAttachmentManager);
         }),
 
         // Multiple file attachment command
         vscode.commands.registerCommand('ai-assistant.attachMultipleFiles', async () => {
-            await handleMultipleFileAttachment(chatProvider);
+            await handleMultipleFileAttachment(fileManager, fileAttachmentManager);
         }),
 
         // Context menu command
         vscode.commands.registerCommand('ai-assistant.attachFileFromExplorer', async (uri: vscode.Uri) => {
             if (uri?.fsPath) {
-                await chatProvider.attachFileFromPath(uri.fsPath);
-                chatProvider.reveal();
+                await handleAttachFileFromPath(uri.fsPath, fileManager, fileAttachmentManager);
             }
         })
     ];
@@ -438,9 +166,113 @@ function registerCommands(
 }
 
 /**
+ * Handles attaching the active file
+ */
+async function handleAttachActiveFile(
+    fileManager: FileManager, 
+    fileAttachmentManager: FileAttachmentManager
+): Promise<void> {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (!activeEditor) {
+        vscode.window.showWarningMessage('No active file to attach');
+        return;
+    }
+
+    try {
+        const fileReference = fileManager.createFileReferenceFromDocument(activeEditor.document);
+        fileAttachmentManager.stageFile(fileReference);
+    } catch (error) {
+        ErrorUtils.logError('Extension.handleAttachActiveFile', error);
+        vscode.window.showErrorMessage(ErrorUtils.createUserFriendlyError(error));
+    }
+}
+
+/**
+ * Handles attaching selected text from the active editor
+ */
+async function handleAttachSelectedText(
+    fileManager: FileManager, 
+    fileAttachmentManager: FileAttachmentManager
+): Promise<void> {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (!activeEditor) {
+        vscode.window.showWarningMessage('No active file to attach selection from');
+        return;
+    }
+
+    const selection = activeEditor.selection;
+    if (selection.isEmpty) {
+        vscode.window.showWarningMessage('No text selected');
+        return;
+    }
+
+    try {
+        const selectedText = activeEditor.document.getText(selection);
+        const fileReference = fileManager.createFileReferenceFromDocument(activeEditor.document, selectedText);
+        fileAttachmentManager.stageFile(fileReference);
+    } catch (error) {
+        ErrorUtils.logError('Extension.handleAttachSelectedText', error);
+        vscode.window.showErrorMessage(ErrorUtils.createUserFriendlyError(error));
+    }
+}
+
+/**
+ * Handles browsing and attaching a file
+ */
+async function handleBrowseAndAttachFile(
+    fileManager: FileManager, 
+    fileAttachmentManager: FileAttachmentManager
+): Promise<void> {
+    const fileUris = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        title: 'Select a file to attach',
+        filters: {
+            'Code Files': ['js', 'ts', 'py', 'java', 'cpp', 'c', 'cs', 'php', 'rb', 'go', 'rs'],
+            'Web Files': ['html', 'css', 'scss', 'sass', 'less', 'vue', 'jsx', 'tsx'],
+            'Data Files': ['json', 'xml', 'yaml', 'yml', 'csv', 'sql'],
+            'Documentation': ['md', 'txt', 'rst'],
+            'All Files': ['*']
+        }
+    });
+
+    if (!fileUris?.length) return;
+
+    try {
+        const fileReferences = await fileManager.processDroppedUri(fileUris[0]);
+        fileAttachmentManager.stageFiles(fileReferences);
+    } catch (error) {
+        ErrorUtils.logError('Extension.handleBrowseAndAttachFile', error);
+        vscode.window.showErrorMessage(ErrorUtils.createUserFriendlyError(error));
+    }
+}
+
+/**
+ * Handles attaching a file from a specific path
+ */
+async function handleAttachFileFromPath(
+    filePath: string, 
+    fileManager: FileManager, 
+    fileAttachmentManager: FileAttachmentManager
+): Promise<void> {
+    try {
+        const uri = vscode.Uri.file(filePath);
+        const fileReferences = await fileManager.processDroppedUri(uri);
+        fileAttachmentManager.stageFiles(fileReferences);
+    } catch (error) {
+        ErrorUtils.logError('Extension.handleAttachFileFromPath', error);
+        vscode.window.showErrorMessage(ErrorUtils.createUserFriendlyError(error));
+    }
+}
+
+/**
  * Handles multiple file attachment with folder support
  */
-async function handleMultipleFileAttachment(chatProvider: ChatProvider): Promise<void> {
+async function handleMultipleFileAttachment(
+    fileManager: FileManager, 
+    fileAttachmentManager: FileAttachmentManager
+): Promise<void> {
     const fileUris = await vscode.window.showOpenDialog({
         canSelectFiles: true,
         canSelectFolders: true,
@@ -457,44 +289,21 @@ async function handleMultipleFileAttachment(chatProvider: ChatProvider): Promise
 
     if (!fileUris?.length) return;
 
+    const allFileReferences = [];
+
     for (const uri of fileUris) {
         try {
-            const stat = await vscode.workspace.fs.stat(uri);
-            
-            if (stat.type === vscode.FileType.Directory) {
-                await handleFolderAttachment(chatProvider, uri);
-            } else {
-                await chatProvider.attachFileFromPath(uri.fsPath);
-            }
+            const fileReferences = await fileManager.processDroppedUri(uri);
+            allFileReferences.push(...fileReferences);
         } catch (error) {
-            console.error('[Extension] Error attaching file:', error);
-            vscode.window.showErrorMessage(`Failed to attach ${uri.fsPath}: ${error}`);
+            ErrorUtils.logError('Extension.handleMultipleFileAttachment', error);
+            vscode.window.showErrorMessage(`Failed to attach ${uri.fsPath}: ${ErrorUtils.createUserFriendlyError(error)}`);
         }
     }
-    
-    chatProvider.reveal();
-}
 
-/**
- * Handles folder attachment by processing contained files
- */
-async function handleFolderAttachment(chatProvider: ChatProvider, folderUri: vscode.Uri): Promise<void> {
-    const maxFiles = 20;
-    const folderFiles = await vscode.workspace.findFiles(
-        new vscode.RelativePattern(folderUri, '**/*'),
-        '**/node_modules/**',
-        50
-    );
-    
-    const filesToProcess = folderFiles.slice(0, maxFiles);
-    
-    for (const fileUri of filesToProcess) {
-        await chatProvider.attachFileFromPath(fileUri.fsPath);
+    if (allFileReferences.length > 0) {
+        fileAttachmentManager.stageFiles(allFileReferences);
     }
-    
-    vscode.window.showInformationMessage(
-        `Attached folder with ${filesToProcess.length} files${folderFiles.length > maxFiles ? ` (limited to ${maxFiles})` : ''}`
-    );
 }
 
 /**
@@ -502,13 +311,11 @@ async function handleFolderAttachment(chatProvider: ChatProvider, folderUri: vsc
  */
 function setupEventListeners(
     context: vscode.ExtensionContext, 
-    chatProvider: ChatProvider, 
     fileTreeDataProvider: FileTreeDataProvider
 ): void {
     // Listen for active editor changes
     const activeEditorChangeListener = vscode.window.onDidChangeActiveTextEditor(async (editor) => {
         if (editor) {
-            chatProvider.notifyActiveFileChange(editor.document);
             fileTreeDataProvider.setActiveFile(editor.document.uri);
         }
     });

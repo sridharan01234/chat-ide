@@ -14,114 +14,105 @@ const vscode = acquireVsCodeApi();
 // Chat messages array - stores all conversation history
 let messages = [];
 
+// Staged files array - files waiting to be sent with user message
+let stagedFiles = [];
+
 // DOM element references (cached for performance)
-let chatContainer, dropIndicator, messageInput, sendButton, attachButton;
+let messagesContainer, messageInput, sendBtn, attachBtn, clearChatBtn, clearStagedBtn, 
+    stagedFilesContainer, stagedFilesList, dropZone;
 
 /**
  * Initialize DOM element references
  * Called once when the page loads to cache frequently used elements
  */
 function initializeDOMReferences() {
-    chatContainer = document.getElementById('chatContainer');
-    dropIndicator = document.getElementById('dropIndicator');
+    messagesContainer = document.getElementById('messagesContainer');
     messageInput = document.getElementById('messageInput');
-    sendButton = document.getElementById('sendButton');
-    attachButton = document.getElementById('attachButton');
+    sendBtn = document.getElementById('sendBtn');
+    attachBtn = document.getElementById('attachBtn');
+    clearChatBtn = document.getElementById('clearChatBtn');
+    clearStagedBtn = document.getElementById('clearStagedBtn');
+    stagedFilesContainer = document.getElementById('stagedFilesContainer');
+    stagedFilesList = document.getElementById('stagedFilesList');
+    dropZone = document.getElementById('dropZone');
 }
 
 /**
  * Handle dragover events to enable file dropping
- * Shows visual feedback when files are dragged over the chat area
- * 
- * @param {DragEvent} e - The dragover event
  */
 function handleDragOver(e) {
-    e.preventDefault(); // CRITICAL: Must prevent default to allow drop
+    e.preventDefault();
     e.stopPropagation();
-    
-    showDropIndicator();
+    showDropZone();
 }
 
 /**
- * Handle dragleave events to hide drop indicator when drag leaves the area
- * Only hides indicator when actually leaving the document (not just moving between elements)
- * 
- * @param {DragEvent} e - The dragleave event
+ * Handle dragleave events
  */
 function handleDragLeave(e) {
-    // Only hide if leaving the document entirely (coordinates will be 0,0)
     if (e.clientX === 0 && e.clientY === 0) {
-        hideDropIndicator();
+        hideDropZone();
     }
 }
 
 /**
- * Show the drop indicator and add drag-active styling
+ * Show the drop zone
  */
-function showDropIndicator() {
-    chatContainer.classList.add('drag-active');
-    dropIndicator.style.display = 'block';
+function showDropZone() {
+    if (dropZone) {
+        dropZone.style.display = 'flex';
+    }
 }
 
 /**
- * Hide the drop indicator and remove drag-active styling
+ * Hide the drop zone
  */
-function hideDropIndicator() {
-    chatContainer.classList.remove('drag-active');
-    dropIndicator.style.display = 'none';
+function hideDropZone() {
+    if (dropZone) {
+        dropZone.style.display = 'none';
+    }
 }
 
 /**
- * Handle file drop events from various sources (VS Code Explorer, Editor tabs, OS files)
- * Processes different data transfer formats and sends appropriate messages to the extension
- * 
- * @param {DragEvent} e - The drop event containing file data
+ * Handle file drop events
  */
 function handleDrop(e) {
     e.preventDefault();
     e.stopPropagation();
     
     console.log('[Webview] Drop event triggered');
-    
-    hideDropIndicator();
+    hideDropZone();
     
     const dataTransfer = e.dataTransfer;
-    
-    // Log available types for debugging
     console.log('[Webview] Available data types:', Array.from(dataTransfer.types));
     
-    // Process drop data in order of preference
+    // Process different data transfer formats
     if (processVSCodeUriList(dataTransfer) ||
         processResourceUrls(dataTransfer) ||
         processCodeEditors(dataTransfer) ||
         processUriList(dataTransfer) ||
         processPlainText(dataTransfer) ||
         processOSFiles(dataTransfer)) {
-        return; // Successfully processed
+        return;
     }
     
-    // No supported data found
     handleDropFailure(dataTransfer);
 }
 
 /**
- * Process VS Code URI list format (primary method for editor tabs)
- * 
- * @param {DataTransfer} dataTransfer - The drop event's data transfer object
- * @returns {boolean} True if data was processed successfully
+ * Process VS Code URI list format
  */
 function processVSCodeUriList(dataTransfer) {
     const data = dataTransfer.getData('application/vnd.code.uri-list');
     if (!data?.trim()) return false;
     
     console.log('[Webview] VS Code URI list found:', data);
-    const uris = data.split(/[\r\n]+/).filter(uri => uri.trim());
+    const files = data.split(/[\r\n]+/).filter(uri => uri.trim());
     
-    if (uris.length > 0) {
+    if (files.length > 0) {
         sendMessage({
-            type: 'filesDropped',
-            source: 'vscode-editor-tab',
-            uris: uris
+            type: 'filesDropped',  // Changed to camelCase
+            files: files
         });
         return true;
     }
@@ -129,23 +120,19 @@ function processVSCodeUriList(dataTransfer) {
 }
 
 /**
- * Process resource URLs format (alternative for editor tabs)
- * 
- * @param {DataTransfer} dataTransfer - The drop event's data transfer object
- * @returns {boolean} True if data was processed successfully
+ * Process resource URLs format
  */
 function processResourceUrls(dataTransfer) {
     const data = dataTransfer.getData('resourceurls');
     if (!data?.trim()) return false;
     
     console.log('[Webview] Resource URLs found:', data);
-    const uris = data.split(/[\r\n]+/).filter(uri => uri.trim());
+    const files = data.split(/[\r\n]+/).filter(uri => uri.trim());
     
-    if (uris.length > 0) {
+    if (files.length > 0) {
         sendMessage({
-            type: 'filesDropped',
-            source: 'vscode-editor-tab',
-            uris: uris
+            type: 'filesDropped',  // Changed to camelCase
+            files: files
         });
         return true;
     }
@@ -153,11 +140,7 @@ function processResourceUrls(dataTransfer) {
 }
 
 /**
- * Process code editors format (structured data from editor tabs)
- * Handles both JSON and plain text formats
- * 
- * @param {DataTransfer} dataTransfer - The drop event's data transfer object
- * @returns {boolean} True if data was processed successfully
+ * Process code editors format
  */
 function processCodeEditors(dataTransfer) {
     const data = dataTransfer.getData('codeeditors');
@@ -166,36 +149,31 @@ function processCodeEditors(dataTransfer) {
     console.log('[Webview] Code editors data found:', data);
     
     try {
-        // Try parsing as JSON
         const editorData = JSON.parse(data);
         
         if (editorData?.resource) {
             sendMessage({
-                type: 'filesDropped',
-                source: 'vscode-editor-tab',
-                uris: [editorData.resource]
+                type: 'filesDropped',  // Changed to camelCase
+                files: [editorData.resource]
             });
             return true;
         }
         
         if (Array.isArray(editorData)) {
-            const uris = editorData.map(item => item.resource).filter(Boolean);
-            if (uris.length > 0) {
+            const files = editorData.map(item => item.resource).filter(Boolean);
+            if (files.length > 0) {
                 sendMessage({
-                    type: 'filesDropped',
-                    source: 'vscode-editor-tab',
-                    uris: uris
+                    type: 'filesDropped',  // Changed to camelCase
+                    files: files
                 });
                 return true;
             }
         }
     } catch {
-        // If not JSON, treat as plain text URI
         if (isValidFilePath(data)) {
             sendMessage({
-                type: 'filesDropped',
-                source: 'vscode-editor-tab',
-                uris: [data]
+                type: 'filesDropped',  // Changed to camelCase
+                files: [data]
             });
             return true;
         }
@@ -204,23 +182,19 @@ function processCodeEditors(dataTransfer) {
 }
 
 /**
- * Process standard URI list format (VS Code Explorer files)
- * 
- * @param {DataTransfer} dataTransfer - The drop event's data transfer object
- * @returns {boolean} True if data was processed successfully
+ * Process standard URI list format
  */
 function processUriList(dataTransfer) {
     const data = dataTransfer.getData('text/uri-list');
     if (!data?.trim()) return false;
     
     console.log('[Webview] URI list found:', data);
-    const uris = data.split(/[\r\n]+/).filter(uri => uri.trim());
+    const files = data.split(/[\r\n]+/).filter(uri => uri.trim());
     
-    if (uris.length > 0) {
+    if (files.length > 0) {
         sendMessage({
-            type: 'filesDropped',
-            source: 'vscode-explorer',
-            uris: uris
+            type: 'filesDropped',  // Changed to camelCase
+            files: files
         });
         return true;
     }
@@ -228,11 +202,7 @@ function processUriList(dataTransfer) {
 }
 
 /**
- * Process plain text format (fallback for various sources)
- * Distinguishes between file paths and actual text content
- * 
- * @param {DataTransfer} dataTransfer - The drop event's data transfer object
- * @returns {boolean} True if data was processed successfully
+ * Process plain text format
  */
 function processPlainText(dataTransfer) {
     const data = dataTransfer.getData('text/plain');
@@ -242,15 +212,13 @@ function processPlainText(dataTransfer) {
     
     if (isValidFilePath(data)) {
         sendMessage({
-            type: 'filesDropped',
-            source: 'vscode-editor-tab',
-            uris: [data]
+            type: 'filesDropped',  // Changed to camelCase
+            files: [data]
         });
         return true;
     } else {
-        // It's just text content
         sendMessage({
-            type: 'textDropped',
+            type: 'textDropped',  // Changed to camelCase
             text: data
         });
         return true;
@@ -258,111 +226,289 @@ function processPlainText(dataTransfer) {
 }
 
 /**
- * Process OS file objects (limited support in webviews)
- * 
- * @param {DataTransfer} dataTransfer - The drop event's data transfer object
- * @returns {boolean} True if data was processed successfully
+ * Process OS file objects
  */
 function processOSFiles(dataTransfer) {
     if (dataTransfer.files.length === 0) return false;
     
-    console.log('[Webview] OS files detected (limited support)');
+    console.log('[Webview] OS files detected');
     const filePaths = Array.from(dataTransfer.files).map(file => file.name);
     
     sendMessage({
-        type: 'filesDropped',
-        source: 'os-files',
+        type: 'filesDropped',  // Changed to camelCase
         files: filePaths
     });
     return true;
 }
 
 /**
- * Handle cases where no supported drop data was found
- * Logs debugging information and notifies the extension
- * 
- * @param {DataTransfer} dataTransfer - The drop event's data transfer object
+ * Handle drop failure
  */
 function handleDropFailure(dataTransfer) {
     console.log('[Webview] No supported drop data found');
     
-    // Log each type's content for debugging
     const typeInfo = Array.from(dataTransfer.types).map(type => {
         const data = dataTransfer.getData(type);
         console.log(`[Webview] Type "${type}":`, data);
         return `${type}: ${data ? data.substring(0, 50) + '...' : 'empty'}`;
     });
     
-    sendMessage({
-        type: 'dropFailed',
+    vscode.postMessage({
+        type: 'DROP_FAILED',
         message: `No supported files found. Available types: ${dataTransfer.types.join(', ')}`,
         debugInfo: typeInfo
     });
 }
 
 /**
- * Check if a string represents a valid file path or URI
- * 
- * @param {string} text - The text to validate
- * @returns {boolean} True if the text appears to be a file path
+ * Check if text is a valid file path
  */
 function isValidFilePath(text) {
     return text.startsWith('file://') || text.includes('/') || text.match(/^[a-zA-Z]:\\/);
 }
 
 /**
- * Render all messages in the chat container
- * Updates the DOM with current message history and maintains scroll position
+ * Update staged files display
  */
-function renderMessages() {
-    chatContainer.innerHTML = '<div class="drop-indicator" id="dropIndicator">📁 Drop files here to attach them</div>';
+function updateStagedFilesDisplay() {
+    if (!stagedFilesContainer || !stagedFilesList) return;
     
-    // Re-cache the drop indicator after innerHTML reset
-    dropIndicator = document.getElementById('dropIndicator');
-    
-    messages.forEach(message => {
-        const messageDiv = createMessageElement(message);
-        chatContainer.appendChild(messageDiv);
-    });
-    
-    // Auto-scroll to bottom to show latest message
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    if (stagedFiles.length > 0) {
+        stagedFilesContainer.style.display = 'block';
+        
+        // Create more detailed file display with language detection and better styling
+        stagedFilesList.innerHTML = stagedFiles.map((file, index) => {
+            const languageIcon = getLanguageIcon(file.language || 'plaintext');
+            const fileExtension = getFileExtension(file.fileName);
+            
+            return `
+                <div class="staged-file-item" data-index="${index}">
+                    <div class="file-info-main">
+                        <span class="file-icon">${languageIcon}</span>
+                        <div class="file-details">
+                            <span class="file-name" title="${file.filePath || file.fileName}">${file.fileName}</span>
+                            <div class="file-meta">
+                                <span class="file-language">${file.language || fileExtension}</span>
+                                <span class="file-size">${formatFileSize(file.size || 0)}</span>
+                                ${file.lineCount ? `<span class="file-lines">${file.lineCount} lines</span>` : ''}
+                            </div>
+                        </div>
+                        <button class="remove-file-btn" onclick="removeStagedFile(${index})" title="Remove file">✕</button>
+                    </div>
+                    ${file.content ? `<div class="file-preview">${getFilePreview(file.content, file.language)}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+        
+        // Update the input placeholder to indicate files are attached
+        if (messageInput) {
+            const fileNames = stagedFiles.map(f => f.fileName).join(', ');
+            messageInput.placeholder = `Ask about ${fileNames}...`;
+        }
+        
+        // Show success notification
+        showFileAttachedNotification(stagedFiles.length);
+        
+    } else {
+        stagedFilesContainer.style.display = 'none';
+        
+        // Reset input placeholder
+        if (messageInput) {
+            messageInput.placeholder = 'Ask me anything about your code...';
+        }
+    }
 }
 
 /**
- * Create a DOM element for a single message
- * 
- * @param {Object} message - The message object to render
- * @param {string} message.sender - Either 'user' or 'assistant'
- * @param {string} message.content - The message text content
- * @param {Object} [message.fileReference] - Optional file attachment info
- * @returns {HTMLElement} The created message element
+ * Get language-specific icon
+ */
+function getLanguageIcon(language) {
+    const icons = {
+        'javascript': '🟨',
+        'typescript': '🔷',
+        'python': '🐍',
+        'java': '☕',
+        'cpp': '⚙️',
+        'c': '⚙️',
+        'csharp': '🔵',
+        'php': '🐘',
+        'ruby': '💎',
+        'go': '🐹',
+        'rust': '🦀',
+        'swift': '🍎',
+        'kotlin': '🎯',
+        'dart': '🎯',
+        'vue': '💚',
+        'html': '🌐',
+        'css': '🎨',
+        'scss': '🎨',
+        'json': '📋',
+        'xml': '📄',
+        'yaml': '📝',
+        'markdown': '📖',
+        'txt': '📄',
+        'plaintext': '📄'
+    };
+    
+    return icons[language.toLowerCase()] || '📄';
+}
+
+/**
+ * Get file extension from filename
+ */
+function getFileExtension(fileName) {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    return ext ? `.${ext}` : '';
+}
+
+/**
+ * Get a preview of file content
+ */
+function getFilePreview(content, language) {
+    if (!content) return '';
+    
+    // Show first 3 lines as preview
+    const lines = content.split('\n').slice(0, 3);
+    const preview = lines.join('\n');
+    const truncated = preview.length > 150 ? preview.substring(0, 147) + '...' : preview;
+    
+    return `<pre><code class="language-${language}">${escapeHtml(truncated)}</code></pre>`;
+}
+
+/**
+ * Escape HTML characters
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Remove a staged file by index
+ */
+function removeStagedFile(index) {
+    if (index >= 0 && index < stagedFiles.length) {
+        stagedFiles.splice(index, 1);
+        updateStagedFilesDisplay();
+        
+        // Notify extension about the change
+        sendMessage({
+            type: 'updateStagedFiles',
+            stagedFiles: stagedFiles
+        });
+    }
+}
+
+/**
+ * Show file attached notification
+ */
+function showFileAttachedNotification(count) {
+    // Create or update notification
+    let notification = document.getElementById('fileAttachedNotification');
+    
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.id = 'fileAttachedNotification';
+        notification.className = 'file-attached-notification';
+        document.body.appendChild(notification);
+    }
+    
+    notification.innerHTML = `
+        <div class="notification-content">
+            <span class="notification-icon">📎</span>
+            <span class="notification-text">${count} file${count > 1 ? 's' : ''} attached</span>
+            <button class="notification-close" onclick="hideFileAttachedNotification()">✕</button>
+        </div>
+    `;
+    
+    notification.style.display = 'block';
+    notification.classList.add('show');
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        hideFileAttachedNotification();
+    }, 3000);
+}
+
+/**
+ * Hide file attached notification
+ */
+function hideFileAttachedNotification() {
+    const notification = document.getElementById('fileAttachedNotification');
+    if (notification) {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 300);
+    }
+}
+
+/**
+ * Render all messages
+ */
+function renderMessages() {
+    if (!messagesContainer) return;
+    
+    // Store the welcome message before clearing
+    const welcomeMessage = messagesContainer.querySelector('.welcome-message');
+    let welcomeHTML = '';
+    if (welcomeMessage) {
+        welcomeHTML = welcomeMessage.outerHTML;
+    }
+    
+    // Clear the container
+    messagesContainer.innerHTML = '';
+    
+    // If there are no messages, show the welcome message
+    if (messages.length === 0) {
+        if (welcomeHTML) {
+            messagesContainer.innerHTML = welcomeHTML;
+        }
+    } else {
+        // Render all messages
+        messages.forEach(message => {
+            const messageElement = createMessageElement(message);
+            messagesContainer.appendChild(messageElement);
+        });
+    }
+    
+    // Auto-scroll to bottom after a short delay to ensure DOM is updated
+    setTimeout(() => {
+        if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    }, 10);
+}
+
+/**
+ * Create a message element
  */
 function createMessageElement(message) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${message.sender === 'user' ? 'user-message' : 'assistant-message'}`;
     
-    // Add message content
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     contentDiv.innerHTML = formatMessageContent(message.content);
     messageDiv.appendChild(contentDiv);
     
-    // Add file attachment if present
     if (message.fileReference) {
         const fileDiv = createFileAttachmentElement(message.fileReference);
         messageDiv.appendChild(fileDiv);
     }
     
+    // Add timestamp
+    const timestampDiv = document.createElement('div');
+    timestampDiv.className = 'message-timestamp';
+    timestampDiv.textContent = new Date(message.timestamp).toLocaleTimeString();
+    messageDiv.appendChild(timestampDiv);
+    
     return messageDiv;
 }
 
 /**
- * Create a DOM element for a file attachment
- * 
- * @param {Object} fileReference - The file reference object
- * @param {string} fileReference.fileName - The name of the attached file
- * @returns {HTMLElement} The created file attachment element
+ * Create file attachment element
  */
 function createFileAttachmentElement(fileReference) {
     const fileDiv = document.createElement('div');
@@ -372,40 +518,40 @@ function createFileAttachmentElement(fileReference) {
 }
 
 /**
- * Format message content with basic markdown-like styling
- * Converts **bold**, *italic*, and newlines to HTML
- * 
- * @param {string} content - Raw message content
- * @returns {string} HTML-formatted content
+ * Format message content
  */
 function formatMessageContent(content) {
     return content
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold text
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')              // Italic text
-        .replace(/\n/g, '<br>');                           // Line breaks
+        .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n/g, '<br>');
 }
 
 /**
- * Send a message to the chat (user input)
- * Validates input and sends to extension for processing
+ * Send user message
  */
 function sendUserMessage() {
-    const message = messageInput.value.trim();
+    const text = messageInput.value.trim();
     
-    if (message) {
-        sendMessage({
-            type: 'sendMessage',
-            message: message
-        });
-        messageInput.value = '';
+    if (!text) {
+        return;
     }
+    
+    // Add immediate visual feedback - show the message locally first
+    console.log('[Webview] Sending message:', text);
+    
+    sendMessage({
+        type: 'sendMessage',  // Changed from 'SEND_MESSAGE' to match WebviewMessageType enum
+        text: text
+    });
+    
+    messageInput.value = '';
 }
 
 /**
- * Send a message to the extension
- * Wrapper function for vscode.postMessage with error handling
- * 
- * @param {Object} message - The message object to send
+ * Send message to extension
  */
 function sendMessage(message) {
     try {
@@ -416,10 +562,7 @@ function sendMessage(message) {
 }
 
 /**
- * Handle keyboard events in the message input
- * Sends message on Enter (without Shift) and allows multi-line with Shift+Enter
- * 
- * @param {KeyboardEvent} e - The keyboard event
+ * Handle keyboard events in message input
  */
 function handleMessageInputKeydown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -429,27 +572,49 @@ function handleMessageInputKeydown(e) {
 }
 
 /**
- * Handle attach file button click
- * Requests the extension to open file picker
+ * Handle attach button click
  */
 function handleAttachButtonClick() {
-    sendMessage({ type: 'attachFile' });
+    sendMessage({ type: 'attachFile' });  // Changed from 'ATTACH_FILE'
 }
 
 /**
- * Listen for messages from the extension
- * Handles updates to the message list and other extension communications
- * 
- * @param {MessageEvent} event - The message event from the extension
+ * Handle clear chat button click
+ */
+function handleClearChatClick() {
+    sendMessage({ type: 'clearChat' });  // New message type for clear
+}
+
+/**
+ * Handle clear staged files button click
+ */
+function handleClearStagedClick() {
+    sendMessage({ type: 'clearStagedFile' });  // Changed from 'CLEAR_STAGED_FILE'
+}
+
+/**
+ * Handle messages from extension
  */
 function handleExtensionMessage(event) {
     const message = event.data;
     
+    console.log('[Webview] Received message from extension:', message.type);
+    
     switch (message.type) {
-        case 'updateMessages':
-            messages = message.messages;
+        case 'updateMessages':  // Changed from 'UPDATE_MESSAGES' to camelCase
+            messages = message.messages || [];
             renderMessages();
             break;
+            
+        case 'updateStagedFile':  // Changed from 'UPDATE_STAGED_FILE' to camelCase
+            stagedFiles = message.stagedFiles || [];
+            updateStagedFilesDisplay();
+            break;
+            
+        case 'dropFailed':  // Changed from 'DROP_FAILED' to camelCase
+            console.error('[Webview] Drop failed:', message.error);
+            break;
+            
         default:
             console.log('[Webview] Unknown message type:', message.type);
     }
@@ -457,11 +622,18 @@ function handleExtensionMessage(event) {
 
 /**
  * Initialize the chat interface
- * Sets up event listeners and renders initial state
  */
 function initializeChat() {
+    console.log('[Webview] Initializing chat interface...');
+    
     // Cache DOM references
     initializeDOMReferences();
+    
+    // Verify critical elements exist
+    if (!messagesContainer || !messageInput || !sendBtn) {
+        console.error('[Webview] Critical DOM elements not found');
+        return;
+    }
     
     // Set up drag and drop event listeners
     document.addEventListener('dragover', handleDragOver);
@@ -469,18 +641,39 @@ function initializeChat() {
     document.addEventListener('drop', handleDrop);
     
     // Set up UI event listeners
-    sendButton.addEventListener('click', sendUserMessage);
-    attachButton.addEventListener('click', handleAttachButtonClick);
-    messageInput.addEventListener('keydown', handleMessageInputKeydown);
+    if (sendBtn) {
+        sendBtn.addEventListener('click', sendUserMessage);
+    }
+    
+    if (attachBtn) {
+        attachBtn.addEventListener('click', handleAttachButtonClick);
+    }
+    
+    if (clearChatBtn) {
+        clearChatBtn.addEventListener('click', handleClearChatClick);
+    }
+    
+    if (clearStagedBtn) {
+        clearStagedBtn.addEventListener('click', handleClearStagedClick);
+    }
+    
+    if (messageInput) {
+        messageInput.addEventListener('keydown', handleMessageInputKeydown);
+    }
     
     // Set up extension message listener
     window.addEventListener('message', handleExtensionMessage);
     
     // Initial render
     renderMessages();
+    updateStagedFilesDisplay();
     
-    console.log('[Webview] Chat interface initialized');
+    console.log('[Webview] Chat interface initialized successfully');
 }
 
 // Initialize when the page loads
-document.addEventListener('DOMContentLoaded', initializeChat);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeChat);
+} else {
+    initializeChat();
+}
