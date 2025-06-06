@@ -86,6 +86,21 @@
         "command": "ai-assistant.attachMultipleFiles",
         "title": "Attach Multiple Files/Folders",
         "icon": "$(files)"
+      },
+      {
+        "command": "ai-assistant.startInlineChat",
+        "title": "Start Inline Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "ai-assistant.acceptInlineChat",
+        "title": "Accept Inline Chat Suggestion",
+        "icon": "$(check)"
+      },
+      {
+        "command": "ai-assistant.rejectInlineChat",
+        "title": "Reject Inline Chat Suggestion",
+        "icon": "$(close)"
       }
     ],
     "menus": {
@@ -145,6 +160,11 @@
           "command": "ai-assistant.attachActiveFile",
           "when": "!editorHasSelection",
           "group": "aiassistant@1"
+        },
+        {
+          "command": "ai-assistant.startInlineChat",
+          "when": "editorTextFocus",
+          "group": "aiassistant@2"
         }
       ],
       "editor/title/context": [
@@ -181,6 +201,21 @@
         "command": "ai-assistant.attachMultipleFiles",
         "key": "ctrl+shift+m",
         "mac": "cmd+shift+m"
+      },
+      {
+        "command": "ai-assistant.startInlineChat",
+        "key": "ctrl+i",
+        "mac": "cmd+i"
+      },
+      {
+        "command": "ai-assistant.acceptInlineChat",
+        "key": "tab",
+        "when": "inlineChatVisible"
+      },
+      {
+        "command": "ai-assistant.rejectInlineChat",
+        "key": "escape",
+        "when": "inlineChatVisible"
       }
     ]
   },

@@ -17,6 +17,7 @@ import { ChatProvider } from "./chatProvider";
 import { DropZoneProvider, FileTreeDataProvider } from "./providers";
 import { FileManager, FileAttachmentManager } from "./fileManager";
 import { OllamaService } from "./ollamaService";
+import { InlineChatProvider } from "./inlineChatProvider";
 import { ErrorUtils, FileUtils } from "./utils";
 import { DEFAULT_CONFIG } from "./types";
 
@@ -39,6 +40,12 @@ export function activate(context: vscode.ExtensionContext) {
       fileManager,
       fileAttachmentManager,
       ollamaService,
+    );
+
+    const inlineChatProvider = InlineChatProvider.getInstance(
+      context.extensionUri,
+      ollamaService,
+      fileManager,
     );
 
     const dropZoneProvider = new DropZoneProvider(async (uri: vscode.Uri) => {
@@ -64,7 +71,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Register commands
-    registerCommands(context, chatProvider, fileManager, fileAttachmentManager);
+    registerCommands(context, chatProvider, fileManager, fileAttachmentManager, inlineChatProvider);
 
     // Set up event listeners
     setupEventListeners(context, fileTreeDataProvider);
@@ -114,7 +121,11 @@ function registerProviders(
     canSelectMany: true,
   });
 
-  context.subscriptions.push(webviewProvider, dropZoneTreeView, fileTreeView);
+  context.subscriptions.push(
+    webviewProvider,
+    dropZoneTreeView,
+    fileTreeView,
+  );
   console.log("[Extension] Providers registered successfully");
 }
 
@@ -126,6 +137,7 @@ function registerCommands(
   chatProvider: ChatProvider,
   fileManager: FileManager,
   fileAttachmentManager: FileAttachmentManager,
+  inlineChatProvider: InlineChatProvider,
 ): void {
   const commands = [
     // Basic chat commands
@@ -182,6 +194,28 @@ function registerCommands(
             fileAttachmentManager,
           );
         }
+      },
+    ),
+
+    // Inline chat commands
+    vscode.commands.registerCommand(
+      "ai-assistant.startInlineChat",
+      async () => {
+        await inlineChatProvider.startInlineChat();
+      },
+    ),
+
+    vscode.commands.registerCommand(
+      "ai-assistant.acceptInlineChat",
+      async () => {
+        await inlineChatProvider.acceptSuggestion();
+      },
+    ),
+
+    vscode.commands.registerCommand(
+      "ai-assistant.rejectInlineChat",
+      async () => {
+        await inlineChatProvider.rejectSuggestion();
       },
     ),
   ];
