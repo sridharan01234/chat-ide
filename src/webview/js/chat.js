@@ -4,7 +4,7 @@
  * Supports drag-and-drop file attachments from various sources
  *
  * @fileoverview Main script for the AI Code Assistant chat webview (jQuery optimized)
- * @author AI Code Assistant Extension
+ * @author SRIDHARAN THILLAIYAPPAN
  * @version 2.0.0
  */
 
