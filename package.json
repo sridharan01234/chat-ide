@@ -1,0 +1,197 @@
+{
+  "name": "ai-code-assistant",
+  "displayName": "AI Code Assistant",
+  "description": "An AI-powered code assistant with enhanced drag-and-drop functionality.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:aiAssistantChat",
+    "onCommand:ai-assistant.openChat"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ai-assistant",
+          "title": "AI Assistant",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "views": {
+      "ai-assistant": [
+        {
+          "id": "aiAssistantChat",
+          "name": "Chat",
+          "type": "webview",
+          "when": "true"
+        },
+        {
+          "id": "aiAssistantDropZone",
+          "name": "Drop Zone",
+          "type": "tree",
+          "when": "true"
+        },
+        {
+          "id": "aiAssistantFiles",
+          "name": "Attached Files",
+          "when": "true"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "ai-assistant.openChat",
+        "title": "Open AI Assistant",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "ai-assistant.clearChat",
+        "title": "Clear Chat",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "ai-assistant.newChat",
+        "title": "New Chat",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ai-assistant.attachActiveFile",
+        "title": "Attach Active File to Chat",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "ai-assistant.browseFiles",
+        "title": "Browse and Attach File",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "ai-assistant.attachSelection",
+        "title": "Attach Selected Code to Chat",
+        "icon": "$(symbol-snippet)"
+      },
+      {
+        "command": "ai-assistant.attachFileFromExplorer",
+        "title": "Attach to AI Chat",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "ai-assistant.attachMultipleFiles",
+        "title": "Attach Multiple Files/Folders",
+        "icon": "$(files)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ai-assistant.attachActiveFile",
+          "when": "view == aiAssistantChat",
+          "group": "navigation@0"
+        },
+        {
+          "command": "ai-assistant.browseFiles",
+          "when": "view == aiAssistantChat",
+          "group": "navigation@0"
+        },
+        {
+          "command": "ai-assistant.attachMultipleFiles",
+          "when": "view == aiAssistantChat",
+          "group": "navigation@0"
+        },
+        {
+          "command": "ai-assistant.newChat",
+          "when": "view == aiAssistantChat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ai-assistant.clearChat",
+          "when": "view == aiAssistantChat",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ai-assistant.attachFileFromExplorer",
+          "when": "view == aiAssistantFiles && viewItem == attachedFile",
+          "group": "inline"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "ai-assistant.attachFileFromExplorer",
+          "when": "!explorerResourceIsFolder",
+          "group": "aiassistant@1"
+        },
+        {
+          "command": "ai-assistant.attachMultipleFiles",
+          "when": "explorerResourceIsFolder",
+          "group": "aiassistant@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ai-assistant.attachSelection",
+          "when": "editorHasSelection",
+          "group": "aiassistant@1"
+        },
+        {
+          "command": "ai-assistant.attachActiveFile",
+          "when": "!editorHasSelection",
+          "group": "aiassistant@1"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "ai-assistant.attachActiveFile",
+          "group": "aiassistant@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ai-assistant.attachFileFromExplorer",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ai-assistant.openChat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      },
+      {
+        "command": "ai-assistant.attachActiveFile",
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f"
+      },
+      {
+        "command": "ai-assistant.attachSelection",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "ai-assistant.attachMultipleFiles",
+        "key": "ctrl+shift+m",
+        "mac": "cmd+shift+m"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  }
+}
