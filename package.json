@@ -192,9 +192,11 @@
   "devDependencies": {
     "@types/node": "^22.15.29",
     "@types/vscode": "^1.80.0",
+    "@types/jquery": "^3.5.29",
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "axios": "^1.9.0"
+    "axios": "^1.9.0",
+    "jquery": "^3.7.1"
   }
 }

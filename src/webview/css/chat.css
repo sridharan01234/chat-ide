@@ -268,18 +268,14 @@ body {
   padding: 10px;
   border-radius: 8px;
   max-width: 90%;
-  animation: fadeIn 0.3s ease-in;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.message.show {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .user-message {
@@ -404,6 +400,33 @@ textarea:focus {
   background-color: var(--vscode-button-secondaryBackground);
   color: var(--vscode-button-secondaryForeground);
   cursor: not-allowed;
+  position: relative;
+  overflow: hidden;
+}
+
+.send-btn:disabled::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
 }
 
 .drop-zone {
@@ -427,22 +450,24 @@ textarea:focus {
   padding: 30px;
   border-radius: 12px;
   border: 3px dashed var(--vscode-button-foreground);
+  animation: pulse 2s infinite;
 }
 
-.drop-icon {
-  font-size: 48px;
-  margin-bottom: 10px;
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
-.drop-text {
-  font-size: 18px;
-  font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.drop-subtext {
-  font-size: 14px;
-  opacity: 0.8;
+.drop-zone.drag-active {
+  background-color: rgba(var(--vscode-button-background), 0.9);
+  backdrop-filter: blur(2px);
 }
 
 /* Enhanced staged file item styles */
@@ -554,16 +579,21 @@ textarea:focus {
   position: fixed;
   top: 20px;
   right: 20px;
-  background-color: var(--vscode-notifications-background);
+  background: linear-gradient(
+    135deg,
+    var(--vscode-notifications-background),
+    var(--vscode-editor-selectionBackground)
+  );
   border: 1px solid var(--vscode-notifications-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   z-index: 10000;
-  display: none;
+  display: block;
   opacity: 0;
   transform: translateX(100%);
-  transition: all 0.3s ease;
-  min-width: 200px;
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  min-width: 220px;
+  backdrop-filter: blur(10px);
 }
 
 .file-attached-notification.show {
@@ -649,20 +679,215 @@ textarea:focus {
   animation: fileDropSuccess 0.4s ease-out;
 }
 
-/* Responsive design for smaller screens */
-@media (max-width: 400px) {
-  .file-meta {
-    flex-direction: column;
-    gap: 4px;
+/* jQuery Animation Enhancements */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+.shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Loading state management */
+body:not(.loaded) {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+body.loaded {
+  opacity: 1;
+}
+
+/* Enhanced message animations */
+.message {
+  margin-bottom: 15px;
+  padding: 10px;
+  border-radius: 8px;
+  max-width: 90%;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+}
+
+.message.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Improved code block styling */
+.code-block {
+  background-color: var(--vscode-textCodeBlock-background);
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin: 10px 0;
+  overflow-x: auto;
+  position: relative;
+}
+
+.code-block::before {
+  content: "Code";
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 0.7em;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-badge-background);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.inline-code {
+  background-color: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-textPreformat-foreground);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+  border: 1px solid var(--vscode-widget-border);
+}
+
+/* Enhanced file preview with syntax highlighting hints */
+.file-preview code.language-javascript,
+.file-preview code.language-typescript {
+  color: #f7df1e;
+}
+
+.file-preview code.language-python {
+  color: #3776ab;
+}
+
+.file-preview code.language-java {
+  color: #ed8b00;
+}
+
+.file-preview code.language-css {
+  color: #1572b6;
+}
+
+.file-preview code.language-html {
+  color: #e34f26;
+}
+
+/* Improved button interactions */
+button {
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+button::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition:
+    width 0.3s,
+    height 0.3s;
+}
+
+button:active::after {
+  width: 120%;
+  height: 120%;
+}
+
+/* Smooth scrollbar styling for webkit browsers */
+.messages-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.messages-container::-webkit-scrollbar-track {
+  background: var(--vscode-scrollbarSlider-background);
+  border-radius: 3px;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+  border-radius: 3px;
+}
+
+.messages-container::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/* Better focus indicators for accessibility */
+button:focus,
+textarea:focus {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+/* Enhanced loading states */
+.send-btn:disabled {
+  position: relative;
+  overflow: hidden;
+}
+
+.send-btn:disabled::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: loading 1.5s infinite;
+}
+
+/* Improved file item hover effects */
+.staged-file-item {
+  transform: translateY(0);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.staged-file-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Better visual hierarchy for file metadata */
+.file-meta span {
+  position: relative;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(var(--vscode-badge-background), 0.5);
+  transition: background 0.2s ease;
+}
+
+.file-meta span:hover {
+  background: var(--vscode-badge-background);
+}
+
+/* Dark mode optimizations */
+@media (prefers-color-scheme: dark) {
+  .drop-zone-content {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
   }
 
   .file-attached-notification {
-    right: 10px;
-    left: 10px;
-    min-width: auto;
-  }
-
-  .notification-content {
-    padding: 10px 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   }
 }
