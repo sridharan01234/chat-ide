@@ -11,6 +11,15 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 - **File Context Awareness** - Analyzes attached files to provide targeted insights
 - **Markdown Support** - Rich text formatting in messages
 
+### 👻 Ghost Chat (NEW!)
+
+- **Cursor-Positioned Interface** - Floating AI chat that appears directly at your cursor
+- **Diff-Style Preview** - See AI suggestions as Monaco Editor-style diff overlays
+- **No Direct Application** - Review changes before accepting them
+- **Keyboard-Driven Workflow** - `Ctrl+K` to start, `Tab` to accept, `Escape` to reject
+- **Context-Aware Suggestions** - Automatically includes surrounding code context
+- **Multi-line Support** - Handles complex code suggestions with proper formatting
+
 ### 📁 Advanced File Attachment
 
 - **Drag & Drop from VS Code Explorer** - Seamlessly drag files from the file explorer
@@ -120,6 +129,57 @@ Open Editor Tab → Drag tab → Drop into chat area
 - **Editor**: Right-click → "Attach to AI Chat"
 
 ### Available Commands
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `AI Assistant: Open Chat` | `Ctrl+Shift+A` | Open main chat interface |
+| `AI Assistant: Start Ghost Chat` | `Ctrl+K` (or `Cmd+K`) | Start cursor-positioned AI chat |
+| `AI Assistant: Accept Ghost Chat` | `Tab` | Accept AI suggestion (when active) |
+| `AI Assistant: Reject Ghost Chat` | `Escape` | Reject AI suggestion (when active) |
+| `AI Assistant: Attach Active File` | - | Attach currently open file |
+| `AI Assistant: Browse Files` | - | Open file picker |
+
+### Ghost Chat Usage
+
+**Ghost Chat** is a revolutionary feature that brings AI assistance directly to your cursor position, similar to modern editors like Cursor.
+
+#### Quick Start
+
+1. **Position your cursor** where you want assistance
+2. **Press `Ctrl+K`** (or `Cmd+K` on Mac)
+3. **Type your request** (e.g., "add error handling")
+4. **Press `Enter`** to send to AI
+5. **Review the preview** (shown as diff-style overlay)
+6. **Press `Tab` to accept** or **`Escape` to reject**
+
+#### Example Workflow
+
+```javascript
+function fetchData(url) {
+    // Place cursor here and press Ctrl+K
+    // Type: "Add error handling"
+    // AI will show suggestion as preview overlay
+    const response = fetch(url);
+    return response.json();
+}
+```
+
+After typing your request and pressing Enter, you'll see a diff-style preview of the suggested changes. The preview uses VS Code's diff editor colors to clearly show what would be added or modified.
+
+#### Ghost Chat Features
+
+- **No Direct Changes**: See suggestions before they're applied
+- **Context Aware**: Includes surrounding code for better suggestions
+- **Multi-line Support**: Handles complex code transformations
+- **Keyboard Driven**: Complete workflow using only keyboard
+- **Visual Feedback**: Clear preview with accept/reject buttons
+
+#### Best Practices
+
+- **Be specific**: "Add null checks" vs "fix this"
+- **Use selection**: Select code first for targeted changes
+- **Review carefully**: Always check suggestions before accepting
+- **Context matters**: Position cursor appropriately for best results
 
 Access via Command Palette (`Ctrl+Shift+P`):
 

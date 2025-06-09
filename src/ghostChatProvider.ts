@@ -1,14 +1,21 @@
 /**
- * Ghost Chat Provider for AI Code Assistant
- *
+ * Enhanced Ghost Chat Provider for AI Code Assistant
+ * 
  * Provides a ghost-like chat interface that appears directly at the cursor position
- * with a floating, semi-transparent input field - similar to Cursor editor
+ * with diff-like accept/reject functionality similar to Monaco Editor patterns
+ * 
+ * Features:
+ * - Floating input at cursor position with manual close (Escape)
+ * - Diff-like preview without applying changes immediately
+ * - Accept/Reject functionality using VS Code's inline suggestion patterns
+ * - Context-aware AI suggestions with proper resource management
+ * - Monaco Editor-style diff preview system
  */
 
-import * as vscode from "vscode";
-import { OllamaService } from "./ollamaService";
-import { FileManager } from "./fileManager";
-import { ErrorUtils } from "./utils";
+import * as vscode from 'vscode';
+import { OllamaService } from './ollamaService';
+import { FileManager } from './fileManager';
+import { ErrorUtils } from './utils';
 
 export class GhostChatProvider {
   private static instance: GhostChatProvider;
@@ -93,12 +100,18 @@ class GhostChatSession {
   private ollamaService: OllamaService;
   private fileManager: FileManager;
   private originalPosition: vscode.Position;
+  private originalSelection: vscode.Selection;
   private suggestionRange: vscode.Range | undefined;
+  private suggestionText: string = "";
   private suggestionDecoration: vscode.TextEditorDecorationType;
   private ghostDecoration: vscode.TextEditorDecorationType;
+  private acceptDecoration: vscode.TextEditorDecorationType;
+  private rejectDecoration: vscode.TextEditorDecorationType;
   private disposables: vscode.Disposable[] = [];
+  private keyboardDisposables: vscode.Disposable[] = [];
   private isProcessing = false;
   private isActive = false;
+  private hasSuggestion = false;
   private currentInput = "";
 
   constructor(
@@ -110,33 +123,59 @@ class GhostChatSession {
     this.ollamaService = ollamaService;
     this.fileManager = fileManager;
     this.originalPosition = editor.selection.active;
+    this.originalSelection = editor.selection;
 
-    // Create decoration type for highlighting suggestions
+    // Create decoration type for diff-style preview of suggestions
     this.suggestionDecoration = vscode.window.createTextEditorDecorationType({
-      backgroundColor: new vscode.ThemeColor(
-        "editor.findMatchHighlightBackground",
-      ),
+      backgroundColor: new vscode.ThemeColor("diffEditor.insertedTextBackground"),
       border: "1px solid",
-      borderColor: new vscode.ThemeColor("editor.findMatchBorder"),
-      opacity: "0.8",
+      borderColor: new vscode.ThemeColor("diffEditor.insertedTextBorder"),
+      opacity: "0.6",
       rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
+      overviewRulerLane: vscode.OverviewRulerLane.Right,
+      overviewRulerColor: new vscode.ThemeColor("diffEditor.insertedTextBorder"),
     });
 
-    // Create decoration type for ghost chat indicator
+    // Create decoration type for ghost chat input
     this.ghostDecoration = vscode.window.createTextEditorDecorationType({
       after: {
         contentText: "",
         backgroundColor: new vscode.ThemeColor("editor.background"),
         border: "1px solid",
-        borderColor: new vscode.ThemeColor("editor.foreground"),
+        borderColor: new vscode.ThemeColor("focusBorder"),
         color: new vscode.ThemeColor("editor.foreground"),
         fontStyle: "normal",
-        margin: "0 0 0 2px",
+        margin: "0 0 0 4px",
         width: "200px",
-        height: "20px",
+        height: "18px",
       },
       isWholeLine: false,
       rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
+    });
+
+    // Create accept/reject button decorations
+    this.acceptDecoration = vscode.window.createTextEditorDecorationType({
+      after: {
+        contentText: " ✅ Accept (Tab)",
+        backgroundColor: new vscode.ThemeColor("button.background"),
+        color: new vscode.ThemeColor("button.foreground"),
+        border: "1px solid",
+        borderColor: new vscode.ThemeColor("button.border"),
+        margin: "0 2px 0 4px",
+        textDecoration: "none; padding: 2px 6px; border-radius: 3px; cursor: pointer;",
+      },
+    });
+
+    this.rejectDecoration = vscode.window.createTextEditorDecorationType({
+      after: {
+        contentText: " ❌ Reject (Esc)",
+        backgroundColor: new vscode.ThemeColor("button.secondaryBackground"),
+        color: new vscode.ThemeColor("button.secondaryForeground"),
+        border: "1px solid",
+        borderColor: new vscode.ThemeColor("contrastBorder"),
+        margin: "0 0 0 2px",
+        textDecoration: "none; padding: 2px 6px; border-radius: 3px; cursor: pointer;",
+      },
     });
   }
 
@@ -200,70 +239,208 @@ class GhostChatSession {
    * Setup keyboard event listeners for ghost input
    */
   private setupKeyboardListeners(): void {
-    // Listen for text document changes to capture typing
-    const textChangeListener = vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.document === this.editor.document && this.isActive) {
-        this.handleTextChange(e);
+    // Create a disposable for keyboard handling
+    const keyboardDisposable = vscode.commands.registerCommand("type", async (args) => {
+      if (!this.isActive || this.editor !== vscode.window.activeTextEditor) {
+        return vscode.commands.executeCommand("default:type", args);
+      }
+
+      return this.handleKeyPress(args);
+    });
+
+    // Listen for special key combinations
+    const escapeHandler = vscode.commands.registerCommand("ghost-chat.escape", () => {
+      if (this.isActive) {
+        this.handleEscape();
       }
     });
 
-    // Listen for key presses
-    const typeListener = vscode.commands.registerCommand("type", (args) => {
-      if (this.isActive && this.editor === vscode.window.activeTextEditor) {
-        return this.handleType(args);
+    const tabHandler = vscode.commands.registerCommand("ghost-chat.tab", () => {
+      if (this.hasSuggestion) {
+        this.acceptSuggestion();
       }
-      return vscode.commands.executeCommand("default:type", args);
     });
 
-    this.disposables.push(textChangeListener, typeListener);
+    const enterHandler = vscode.commands.registerCommand("ghost-chat.enter", () => {
+      if (this.isActive && !this.hasSuggestion) {
+        this.submitInput();
+      }
+    });
+
+    this.keyboardDisposables.push(keyboardDisposable, escapeHandler, tabHandler, enterHandler);
+    this.disposables.push(...this.keyboardDisposables);
+
+    // Register keybindings temporarily
+    vscode.commands.executeCommand('setContext', 'ghostChatActive', true);
   }
 
   /**
-   * Handle typing in ghost input
+   * Handle key press events
    */
-  private async handleType(args: { text: string }): Promise<void> {
+  private async handleKeyPress(args: { text: string }): Promise<void> {
     const text = args.text;
 
+    // Handle special cases
     if (text === "\n" || text === "\r\n") {
-      // Enter pressed - submit the input
-      await this.submitInput();
+      // Enter pressed
+      if (!this.hasSuggestion) {
+        await this.submitInput();
+      }
       return;
     }
 
-    if (text === "\u001b") {
-      // Escape pressed - cancel
-      this.dispose();
+    if (text === "\t") {
+      // Tab pressed
+      if (this.hasSuggestion) {
+        await this.acceptSuggestion();
+      }
       return;
     }
 
-    if (text === "\b" || text === "\u007f") {
-      // Backspace pressed
-      this.currentInput = this.currentInput.slice(0, -1);
-    } else if (text.length === 1 && text >= " ") {
-      // Regular character
+    if (text === "\u0008" || text === "\u007f") {
+      // Backspace/Delete pressed
+      if (this.currentInput.length > 0) {
+        this.currentInput = this.currentInput.slice(0, -1);
+        this.showGhostInput();
+      } else if (this.hasSuggestion) {
+        // If no input and we have suggestion, reject it
+        this.rejectSuggestion();
+      }
+      return;
+    }
+
+    // Handle regular text input
+    if (text.length === 1 && text >= " ") {
       this.currentInput += text;
+      this.showGhostInput();
     }
-
-    // Update ghost decoration
-    this.showGhostInput();
   }
 
   /**
-   * Handle text document changes
+   * Handle escape key
    */
-  private handleTextChange(e: vscode.TextDocumentChangeEvent): void {
-    // Check if changes are at the cursor position and might interfere
-    for (const change of e.contentChanges) {
-      if (
-        change.range.contains(this.originalPosition) ||
-        change.range.start.isEqual(this.originalPosition)
-      ) {
-        // User is typing at the cursor position, update our tracking
-        this.originalPosition = change.range.end;
-        this.showGhostInput();
-        break;
-      }
+  private handleEscape(): void {
+    if (this.hasSuggestion) {
+      this.rejectSuggestion();
+    } else {
+      this.dispose();
     }
+  }
+
+  /**
+   * Show suggestion as diff-style preview without applying changes
+   */
+  private async showSuggestion(suggestion: string): Promise<void> {
+    const selection = this.editor.selection;
+    const position = selection.isEmpty ? this.originalPosition : selection.start;
+
+    // Store suggestion text for later application
+    this.suggestionText = suggestion;
+    this.hasSuggestion = true;
+
+    // Calculate the range where suggestion would be inserted
+    const lines = suggestion.split("\n");
+    let endLine: number;
+    let endChar: number;
+
+    if (selection.isEmpty) {
+      // Insert at cursor
+      endLine = position.line + lines.length - 1;
+      endChar = lines.length === 1 
+        ? position.character + suggestion.length 
+        : lines[lines.length - 1].length;
+    } else {
+      // Replace selection
+      endLine = position.line + lines.length - 1;
+      endChar = lines.length === 1 
+        ? position.character + suggestion.length 
+        : lines[lines.length - 1].length;
+    }
+
+    const endPosition = new vscode.Position(endLine, endChar);
+    this.suggestionRange = new vscode.Range(position, endPosition);
+
+    // Create virtual document to show diff-style preview
+    await this.showDiffPreview(suggestion, position, selection);
+
+    // Show accept/reject buttons
+    this.showActionButtons();
+
+    // Clear ghost input
+    this.clearGhostInput();
+
+    // Show status message
+    vscode.window.setStatusBarMessage(
+      "AI suggestion ready - Tab to accept, Esc to reject", 
+      10000
+    );
+  }
+
+  /**
+   * Show diff-style preview using virtual text
+   */
+  private async showDiffPreview(suggestion: string, position: vscode.Position, selection: vscode.Selection): Promise<void> {
+    // Create decoration that shows the suggestion as preview text
+    const suggestionLines = suggestion.split('\n');
+    const decorationOptions: vscode.DecorationOptions[] = [];
+
+    if (suggestionLines.length === 1) {
+      // Single line suggestion
+      decorationOptions.push({
+        range: new vscode.Range(position, position),
+        renderOptions: {
+          after: {
+            contentText: suggestion,
+            backgroundColor: new vscode.ThemeColor("diffEditor.insertedTextBackground"),
+            color: new vscode.ThemeColor("diffEditor.insertedTextColor"),
+            fontStyle: "italic",
+            border: "1px solid",
+            borderColor: new vscode.ThemeColor("diffEditor.insertedTextBorder"),
+            margin: "0 2px",
+          }
+        }
+      });
+    } else {
+      // Multi-line suggestion - show preview at cursor position
+      suggestionLines.forEach((line, index) => {
+        const linePosition = new vscode.Position(position.line + index, 
+          index === 0 ? position.character : 0);
+        decorationOptions.push({
+          range: new vscode.Range(linePosition, linePosition),
+          renderOptions: {
+            after: {
+              contentText: line,
+              backgroundColor: new vscode.ThemeColor("diffEditor.insertedTextBackground"),
+              color: new vscode.ThemeColor("diffEditor.insertedTextColor"),
+              fontStyle: "italic",
+              border: index === 0 ? "1px solid" : "none",
+              borderColor: new vscode.ThemeColor("diffEditor.insertedTextBorder"),
+            }
+          }
+        });
+      });
+    }
+
+    // Apply diff-style decoration
+    this.editor.setDecorations(this.suggestionDecoration, decorationOptions);
+  }
+
+  /**
+   * Show action buttons for accept/reject
+   */
+  private showActionButtons(): void {
+    if (!this.suggestionRange) return;
+
+    const buttonPosition = this.suggestionRange.end;
+    const buttonRange = new vscode.Range(buttonPosition, buttonPosition);
+
+    // Show accept button
+    this.editor.setDecorations(this.acceptDecoration, [{ range: buttonRange }]);
+
+    // Show reject button (positioned after accept button)  
+    const rejectPosition = new vscode.Position(buttonPosition.line, buttonPosition.character + 1);
+    const rejectRange = new vscode.Range(rejectPosition, rejectPosition);
+    this.editor.setDecorations(this.rejectDecoration, [{ range: rejectRange }]);
   }
 
   /**
@@ -391,104 +568,70 @@ Please provide a helpful response. If you're suggesting code changes, provide on
   }
 
   /**
-   * Show suggestion inline in the editor
-   */
-  private async showSuggestion(suggestion: string): Promise<void> {
-    const selection = this.editor.selection;
-    const position = selection.isEmpty
-      ? this.originalPosition
-      : selection.start;
-
-    // Insert suggestion at cursor/selection
-    await this.editor.edit((editBuilder) => {
-      if (selection.isEmpty) {
-        editBuilder.insert(position, suggestion);
-      } else {
-        editBuilder.replace(selection, suggestion);
-      }
-    });
-
-    // Create range for the inserted text
-    const lines = suggestion.split("\n");
-    const endLine = position.line + lines.length - 1;
-    const endChar =
-      lines.length === 1
-        ? position.character + suggestion.length
-        : lines[lines.length - 1].length;
-    const endPosition = new vscode.Position(endLine, endChar);
-    this.suggestionRange = new vscode.Range(position, endPosition);
-
-    // Apply suggestion decoration
-    if (this.suggestionRange) {
-      this.editor.setDecorations(this.suggestionDecoration, [
-        this.suggestionRange,
-      ]);
-    }
-
-    // Show action buttons
-    const action = await vscode.window.showInformationMessage(
-      "AI suggestion inserted at cursor",
-      { modal: false },
-      "Accept ✅",
-      "Reject ❌",
-      "Regenerate 🔄",
-    );
-
-    if (action === "Accept ✅") {
-      await this.acceptSuggestion();
-    } else if (action === "Reject ❌") {
-      this.rejectSuggestion();
-    } else if (action === "Regenerate 🔄") {
-      this.rejectSuggestion();
-      // Start new ghost chat session for regeneration
-      setTimeout(() => {
-        vscode.commands.executeCommand("ai-assistant.startGhostChat");
-      }, 100);
-    } else {
-      // Auto-accept if no action taken
-      setTimeout(() => {
-        if (this.suggestionRange) {
-          this.acceptSuggestion();
-        }
-      }, 10000);
-    }
-  }
-
-  /**
    * Accept the current suggestion
    */
   public async acceptSuggestion(): Promise<void> {
-    // Clear decoration
-    this.editor.setDecorations(this.suggestionDecoration, []);
-
-    // Move cursor to end of suggestion
-    if (this.suggestionRange) {
-      const newPosition = this.suggestionRange.end;
-      this.editor.selection = new vscode.Selection(newPosition, newPosition);
+    if (!this.hasSuggestion || !this.suggestionText) {
+      return;
     }
+
+    // Apply the suggestion to the editor
+    const selection = this.originalSelection;
+    const position = selection.isEmpty ? this.originalPosition : selection.start;
+
+    await this.editor.edit((editBuilder) => {
+      if (selection.isEmpty) {
+        editBuilder.insert(position, this.suggestionText);
+      } else {
+        editBuilder.replace(selection, this.suggestionText);
+      }
+    });
+
+    // Clear all decorations
+    this.clearAllSuggestionDecorations();
+
+    // Move cursor to end of inserted text
+    const lines = this.suggestionText.split("\n");
+    const endLine = position.line + lines.length - 1;
+    const endChar =
+      lines.length === 1
+        ? position.character + this.suggestionText.length
+        : lines[lines.length - 1].length;
+    const endPosition = new vscode.Position(endLine, endChar);
+    
+    this.editor.selection = new vscode.Selection(endPosition, endPosition);
 
     vscode.window.showInformationMessage("✅ AI suggestion accepted");
     this.dispose();
   }
 
   /**
+   * Clear all suggestion-related decorations
+   */
+  private clearAllSuggestionDecorations(): void {
+    this.editor.setDecorations(this.suggestionDecoration, []);
+    this.editor.setDecorations(this.acceptDecoration, []);
+    this.editor.setDecorations(this.rejectDecoration, []);
+  }
+
+  /**
    * Reject the current suggestion
    */
   public rejectSuggestion(): void {
-    if (this.suggestionRange) {
-      // Remove the suggested text
-      this.editor.edit((editBuilder) => {
-        editBuilder.delete(this.suggestionRange!);
-      });
-
-      // Clear decoration
-      this.editor.setDecorations(this.suggestionDecoration, []);
+    if (this.hasSuggestion) {
+      // Clear all suggestion decorations (no need to remove text since it was never inserted)
+      this.clearAllSuggestionDecorations();
 
       // Restore original cursor position
       this.editor.selection = new vscode.Selection(
         this.originalPosition,
         this.originalPosition,
       );
+
+      // Reset suggestion state
+      this.hasSuggestion = false;
+      this.suggestionText = "";
+      this.suggestionRange = undefined;
     }
 
     vscode.window.showInformationMessage("❌ AI suggestion rejected");
@@ -500,10 +643,14 @@ Please provide a helpful response. If you're suggesting code changes, provide on
    */
   public dispose(): void {
     this.isActive = false;
+    this.hasSuggestion = false;
+
+    // Clear context
+    vscode.commands.executeCommand('setContext', 'ghostChatActive', false);
 
     // Clear any decorations
     this.clearGhostInput();
-    this.editor.setDecorations(this.suggestionDecoration, []);
+    this.clearAllSuggestionDecorations();
 
     // Dispose decoration types
     if (this.suggestionDecoration) {
@@ -512,9 +659,22 @@ Please provide a helpful response. If you're suggesting code changes, provide on
     if (this.ghostDecoration) {
       this.ghostDecoration.dispose();
     }
+    if (this.acceptDecoration) {
+      this.acceptDecoration.dispose();
+    }
+    if (this.rejectDecoration) {
+      this.rejectDecoration.dispose();
+    }
+
+    // Dispose keyboard handlers first
+    this.keyboardDisposables.forEach((d) => d.dispose());
+    this.keyboardDisposables = [];
 
     // Dispose all other resources
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];
+
+    // Clear status bar
+    vscode.window.setStatusBarMessage("");
   }
 }
