@@ -381,8 +381,6 @@ export function registerInlineCompletions(
       _context: vscode.InlineCompletionContext,
       _token: vscode.CancellationToken,
     ) {
-      // No longer trigger based on "// ai:" prefix
-      // Instead, trigger when the user presses the assigned keyboard shortcut
 
       // Assemble context code (10 lines before and after)
       const startLine = Math.max(0, position.line - 10);
