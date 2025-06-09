@@ -115,17 +115,6 @@ export interface FileStatistics {
 }
 
 /**
- * Code structure analysis result
- */
-export interface CodeAnalysis {
-  functions: string[];
-  classes: string[];
-  imports: string[];
-  complexity?: number;
-  language: string;
-}
-
-/**
  * Webview message types for communication between extension and webview
  */
 export interface WebviewMessage {

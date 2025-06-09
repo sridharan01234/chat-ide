@@ -225,6 +225,28 @@
         "when": "editorTextFocus"
       },
       {
+        "command": "ai-assistant.showCopilotGhostMode",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ai-assistant.startGhostChat",
+        "key": "ctrl+k",
+        "mac": "cmd+k",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ai-assistant.acceptGhostChat",
+        "key": "tab",
+        "when": "ghostChatActive"
+      },
+      {
+        "command": "ai-assistant.rejectGhostChat",
+        "key": "escape",
+        "when": "ghostChatActive"
+      },
+      {
         "command": "ai-assistant.closeCopilotPanel",
         "key": "escape",
         "when": "copilotPanelVisible"

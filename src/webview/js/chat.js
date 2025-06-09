@@ -170,18 +170,18 @@ function initializeChatWithJQuery() {
   }
 
   /**
-   * Process VS Code URI list format
+   * Generic function to process URI list data from various data transfer types
    */
-  function processVSCodeUriList(dataTransfer) {
-    const data = dataTransfer.getData("application/vnd.code.uri-list");
+  function processUriListData(dataTransfer, dataType, logName) {
+    const data = dataTransfer.getData(dataType);
     if (!data?.trim()) return false;
 
-    console.log("[Webview] VS Code URI list found:", data);
+    console.log(`[Webview] ${logName} found:`, data);
     const files = data.split(/[\r\n]+/).filter((uri) => uri.trim());
 
     if (files.length > 0) {
       sendMessage({
-        type: "filesDropped", // Changed to camelCase
+        type: "filesDropped",
         files: files,
       });
       return true;
@@ -190,23 +190,17 @@ function initializeChatWithJQuery() {
   }
 
   /**
+   * Process VS Code URI list format
+   */
+  function processVSCodeUriList(dataTransfer) {
+    return processUriListData(dataTransfer, "application/vnd.code.uri-list", "VS Code URI list");
+  }
+
+  /**
    * Process resource URLs format
    */
   function processResourceUrls(dataTransfer) {
-    const data = dataTransfer.getData("resourceurls");
-    if (!data?.trim()) return false;
-
-    console.log("[Webview] Resource URLs found:", data);
-    const files = data.split(/[\r\n]+/).filter((uri) => uri.trim());
-
-    if (files.length > 0) {
-      sendMessage({
-        type: "filesDropped", // Changed to camelCase
-        files: files,
-      });
-      return true;
-    }
-    return false;
+    return processUriListData(dataTransfer, "resourceurls", "Resource URLs");
   }
 
   /**
@@ -231,18 +225,17 @@ function initializeChatWithJQuery() {
 
       if (Array.isArray(editorData)) {
         const files = editorData.map((item) => item.resource).filter(Boolean);
-        if (files.length > 0) {
-          sendMessage({
-            type: "filesDropped", // Changed to camelCase
-            files: files,
-          });
+        if (files.length > 0) {        sendMessage({
+          type: "filesDropped",
+          files: files,
+        });
           return true;
         }
       }
     } catch {
       if (isValidFilePath(data)) {
         sendMessage({
-          type: "filesDropped", // Changed to camelCase
+          type: "filesDropped",
           files: [data],
         });
         return true;
@@ -255,20 +248,7 @@ function initializeChatWithJQuery() {
    * Process standard URI list format
    */
   function processUriList(dataTransfer) {
-    const data = dataTransfer.getData("text/uri-list");
-    if (!data?.trim()) return false;
-
-    console.log("[Webview] URI list found:", data);
-    const files = data.split(/[\r\n]+/).filter((uri) => uri.trim());
-
-    if (files.length > 0) {
-      sendMessage({
-        type: "filesDropped", // Changed to camelCase
-        files: files,
-      });
-      return true;
-    }
-    return false;
+    return processUriListData(dataTransfer, "text/uri-list", "URI list");
   }
 
   /**
@@ -282,13 +262,13 @@ function initializeChatWithJQuery() {
 
     if (isValidFilePath(data)) {
       sendMessage({
-        type: "filesDropped", // Changed to camelCase
+        type: "filesDropped",
         files: [data],
       });
       return true;
     } else {
       sendMessage({
-        type: "textDropped", // Changed to camelCase
+        type: "textDropped",
         text: data,
       });
       return true;
@@ -305,7 +285,7 @@ function initializeChatWithJQuery() {
     const filePaths = Array.from(dataTransfer.files).map((file) => file.name);
 
     sendMessage({
-      type: "filesDropped", // Changed to camelCase
+      type: "filesDropped",
       files: filePaths,
     });
     return true;
@@ -653,21 +633,21 @@ function initializeChatWithJQuery() {
    * Handle attach button click
    */
   function handleAttachButtonClick() {
-    sendMessage({ type: "attachFile" }); // Changed from 'ATTACH_FILE'
+    sendMessage({ type: "attachFile" });
   }
 
   /**
    * Handle clear chat button click
    */
   function handleClearChatClick() {
-    sendMessage({ type: "clearChat" }); // New message type for clear
+    sendMessage({ type: "clearChat" });
   }
 
   /**
    * Handle clear staged files button click
    */
   function handleClearStagedClick() {
-    sendMessage({ type: "clearStagedFile" }); // Changed from 'CLEAR_STAGED_FILE'
+    sendMessage({ type: "clearStagedFile" });
   }
 
   /**
@@ -679,17 +659,17 @@ function initializeChatWithJQuery() {
     console.log("[Webview] Received message from extension:", message.type);
 
     switch (message.type) {
-      case "updateMessages": // Changed from 'UPDATE_MESSAGES' to camelCase
+      case "updateMessages":
         messages = message.messages || [];
         renderMessages();
         break;
 
-      case "updateStagedFile": // Changed from 'UPDATE_STAGED_FILE' to camelCase
+      case "updateStagedFile":
         stagedFiles = message.stagedFiles || [];
         updateStagedFilesDisplay();
         break;
 
-      case "dropFailed": // Changed from 'DROP_FAILED' to camelCase
+      case "dropFailed":
         console.error("[Webview] Drop failed:", message.error);
         break;
 

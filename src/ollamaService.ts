@@ -11,39 +11,7 @@
 
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import * as vscode from "vscode";
-
-interface OllamaMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
-
-interface OllamaResponse {
-  message: {
-    role: string;
-    content: string;
-  };
-  done: boolean;
-  total_duration?: number;
-  load_duration?: number;
-  prompt_eval_count?: number;
-  prompt_eval_duration?: number;
-  eval_count?: number;
-  eval_duration?: number;
-}
-
-interface OllamaModelInfo {
-  name: string;
-  size: number;
-  digest: string;
-  details: {
-    format: string;
-    family: string;
-    families: string[];
-    parameter_size: string;
-    quantization_level: string;
-  };
-  modified_at: string;
-}
+import { OllamaMessage, OllamaResponse, OllamaModelInfo } from "./types";
 
 export class OllamaService {
   private client: AxiosInstance;
@@ -118,14 +86,9 @@ export class OllamaService {
   }
 
   /**
-   * Generate a response using Ollama
+   * Validates connection and model before making API calls
    */
-  public async generateResponse(
-    prompt: string,
-    context?: string,
-    model?: string,
-    systemPrompt?: string,
-  ): Promise<string> {
+  private async validateConnection(model?: string): Promise<string> {
     if (!this.isConnected) {
       const connected = await this.checkConnection();
       if (!connected) {
@@ -151,13 +114,75 @@ export class OllamaService {
       if (this.availableModels.length > 0) {
         const fallbackModel = this.availableModels[0];
         console.log(`[OllamaService] Using fallback model: ${fallbackModel}`);
-        return this.generateResponse(
-          prompt,
-          context,
-          fallbackModel,
-          systemPrompt,
-        );
+        return fallbackModel;
       }
+    }
+
+    return modelToUse;
+  }
+
+  /**
+   * Common error handling for Ollama API responses
+   */
+  private handleOllamaError(error: any, modelToUse: string): never {
+    console.error("[OllamaService] Error generating response:", error);
+
+    if (error.code === "ECONNREFUSED") {
+      throw new Error(
+        "Cannot connect to Ollama server. Make sure Ollama is running.",
+      );
+    } else if (error.response?.status === 404) {
+      throw new Error(
+        `Model "${modelToUse}" not found. Available models: ${this.availableModels.join(", ")}`,
+      );
+    } else if (error.response?.data?.error) {
+      throw new Error(`Ollama error: ${error.response.data.error}`);
+    } else {
+      throw new Error(`Failed to generate response: ${error.message}`);
+    }
+  }
+
+  /**
+   * Makes the actual API call to Ollama
+   */
+  private async makeOllamaRequest(
+    modelToUse: string,
+    messages: OllamaMessage[],
+  ): Promise<string> {
+    const response: AxiosResponse<OllamaResponse> = await this.client.post(
+      "/api/chat",
+      {
+        model: modelToUse,
+        messages: messages,
+        stream: false,
+        options: {
+          temperature: 0.7,
+          top_p: 0.9,
+          top_k: 40,
+        },
+      },
+    );
+
+    if (response.data && response.data.message) {
+      return response.data.message.content.trim();
+    } else {
+      throw new Error("Invalid response format from Ollama");
+    }
+  }
+  /**
+   * Generate a response using Ollama
+   */
+  public async generateResponse(
+    prompt: string,
+    context?: string,
+    model?: string,
+    systemPrompt?: string,
+  ): Promise<string> {
+    const modelToUse = await this.validateConnection(model);
+
+    // Check if we need to use fallback model due to validation
+    if (modelToUse !== (model || this.defaultModel)) {
+      return this.generateResponse(prompt, context, modelToUse, systemPrompt);
     }
 
     try {
@@ -184,41 +209,9 @@ export class OllamaService {
         });
       }
 
-      const response: AxiosResponse<OllamaResponse> = await this.client.post(
-        "/api/chat",
-        {
-          model: modelToUse,
-          messages: messages,
-          stream: false,
-          options: {
-            temperature: 0.7,
-            top_p: 0.9,
-            top_k: 40,
-          },
-        },
-      );
-
-      if (response.data && response.data.message) {
-        return response.data.message.content.trim();
-      } else {
-        throw new Error("Invalid response format from Ollama");
-      }
+      return await this.makeOllamaRequest(modelToUse, messages);
     } catch (error: any) {
-      console.error("[OllamaService] Error generating response:", error);
-
-      if (error.code === "ECONNREFUSED") {
-        throw new Error(
-          "Cannot connect to Ollama server. Make sure Ollama is running.",
-        );
-      } else if (error.response?.status === 404) {
-        throw new Error(
-          `Model "${modelToUse}" not found. Available models: ${this.availableModels.join(", ")}`,
-        );
-      } else if (error.response?.data?.error) {
-        throw new Error(`Ollama error: ${error.response.data.error}`);
-      } else {
-        throw new Error(`Failed to generate response: ${error.message}`);
-      }
+      this.handleOllamaError(error, modelToUse);
     }
   }
 
@@ -229,55 +222,15 @@ export class OllamaService {
     messages: OllamaMessage[],
     model?: string,
   ): Promise<string> {
-    if (!this.isConnected) {
-      const connected = await this.checkConnection();
-      if (!connected) {
-        throw new Error(
-          "Cannot connect to Ollama server. Make sure Ollama is running on " +
-            this.baseUrl,
-        );
-      }
-    }
+    const modelToUse = await this.validateConnection(model);
 
-    const modelToUse = model || this.defaultModel;
-
-    // Verify model is available
-    if (
-      this.availableModels.length > 0 &&
-      !this.availableModels.includes(modelToUse)
-    ) {
-      console.warn(
-        `[OllamaService] Model ${modelToUse} not found. Available models:`,
-        this.availableModels,
-      );
-      // Try to use the first available model as fallback
-      if (this.availableModels.length > 0) {
-        const fallbackModel = this.availableModels[0];
-        console.log(`[OllamaService] Using fallback model: ${fallbackModel}`);
-        return this.generateChatResponse(messages, fallbackModel);
-      }
+    // Check if we need to use fallback model due to validation
+    if (modelToUse !== (model || this.defaultModel)) {
+      return this.generateChatResponse(messages, modelToUse);
     }
 
     try {
-      const response: AxiosResponse<OllamaResponse> = await this.client.post(
-        "/api/chat",
-        {
-          model: modelToUse,
-          messages: messages,
-          stream: false,
-          options: {
-            temperature: 0.7,
-            top_p: 0.9,
-            top_k: 40,
-          },
-        },
-      );
-
-      if (response.data && response.data.message) {
-        return response.data.message.content.trim();
-      } else {
-        throw new Error("Invalid response format from Ollama");
-      }
+      return await this.makeOllamaRequest(modelToUse, messages);
     } catch (error: any) {
       console.error("[OllamaService] Error generating chat response:", error);
       throw error;
