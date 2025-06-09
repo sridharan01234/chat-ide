@@ -1,354 +1,562 @@
 /**
- * Inline Chat Provider for VS Code Extension
- * 
- * Provides GitHub Copilot-like inline chat functionality directly in the editor
- * using VS Code's built-in APIs for inline suggestions and input boxes.
- * 
- * @fileoverview Inline chat implementation with VS Code APIs
- * @author SRIDHARAN THILLAIYAPPAN
- * @version 1.0.0
+ * Inline Chat Provider for AI Code Assistant
+ *
+ * Provides true inline chat experience directly in the editor at cursor position
  */
 
 import * as vscode from "vscode";
 import { OllamaService } from "./ollamaService";
 import { FileManager } from "./fileManager";
-import { ErrorUtils } from "./utils";
 
 export class InlineChatProvider {
   private static instance: InlineChatProvider;
-  private currentEditor: vscode.TextEditor | undefined;
-  private currentPosition: vscode.Position | undefined;
-  private currentDecoration: vscode.TextEditorDecorationType | undefined;
-  private isVisible: boolean = false;
-  private pendingSuggestion: string | undefined;
-  private disposables: vscode.Disposable[] = [];
+  private ollamaService: OllamaService;
+  private fileManager: FileManager;
+  private activeSession: InlineChatSession | undefined;
 
-  constructor(
-    private extensionUri: vscode.Uri,
-    private ollamaService: OllamaService,
-    private fileManager: FileManager
-  ) {}
+  private constructor(ollamaService: OllamaService, fileManager: FileManager) {
+    this.ollamaService = ollamaService;
+    this.fileManager = fileManager;
+  }
 
   public static getInstance(
-    extensionUri: vscode.Uri,
     ollamaService: OllamaService,
-    fileManager: FileManager
+    fileManager: FileManager,
   ): InlineChatProvider {
     if (!InlineChatProvider.instance) {
       InlineChatProvider.instance = new InlineChatProvider(
-        extensionUri,
         ollamaService,
-        fileManager
+        fileManager,
       );
     }
     return InlineChatProvider.instance;
   }
 
   /**
-   * Start inline chat at the current cursor position
+   * Start inline chat session at current cursor position
    */
   public async startInlineChat(): Promise<void> {
-    const activeEditor = vscode.window.activeTextEditor;
-    if (!activeEditor) {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
       vscode.window.showWarningMessage("No active editor found");
       return;
     }
 
-    this.currentEditor = activeEditor;
-    this.currentPosition = activeEditor.selection.active;
-
-    try {
-      await this.showInlineChatInput();
-      this.setContext(true);
-    } catch (error) {
-      ErrorUtils.logError("InlineChatProvider.startInlineChat", error);
-      vscode.window.showErrorMessage(
-        `Failed to start inline chat: ${ErrorUtils.createUserFriendlyError(error)}`
-      );
+    // End any existing session
+    if (this.activeSession) {
+      this.activeSession.dispose();
+      this.activeSession = undefined;
     }
+
+    // Create new session
+    this.activeSession = new InlineChatSession(
+      editor,
+      this.ollamaService,
+      this.fileManager,
+    );
+
+    await this.activeSession.start();
   }
 
   /**
-   * Accept the current inline chat suggestion
+   * Accept the current suggestion
    */
   public async acceptSuggestion(): Promise<void> {
-    if (!this.pendingSuggestion || !this.currentEditor || !this.currentPosition) {
-      return;
-    }
-
-    try {
-      const workspaceEdit = new vscode.WorkspaceEdit();
-      workspaceEdit.insert(
-        this.currentEditor.document.uri,
-        this.currentPosition,
-        this.pendingSuggestion
-      );
-      
-      await vscode.workspace.applyEdit(workspaceEdit);
-      await this.hideInlineChat();
-      
-      vscode.window.showInformationMessage("Suggestion accepted");
-    } catch (error) {
-      ErrorUtils.logError("InlineChatProvider.acceptSuggestion", error);
-      vscode.window.showErrorMessage(
-        `Failed to accept suggestion: ${ErrorUtils.createUserFriendlyError(error)}`
-      );
+    if (this.activeSession) {
+      await this.activeSession.acceptSuggestion();
+      this.activeSession.dispose();
+      this.activeSession = undefined;
     }
   }
 
   /**
-   * Reject the current inline chat suggestion
+   * Reject the current suggestion
    */
   public async rejectSuggestion(): Promise<void> {
-    await this.hideInlineChat();
-    vscode.window.showInformationMessage("Suggestion rejected");
+    if (this.activeSession) {
+      this.activeSession.rejectSuggestion();
+      this.activeSession.dispose();
+      this.activeSession = undefined;
+    }
   }
 
   /**
-   * Hide the inline chat widget
+   * Dispose all resources
    */
-  public async hideInlineChat(): Promise<void> {
-    if (this.currentDecoration) {
-      this.currentDecoration.dispose();
-      this.currentDecoration = undefined;
+  public dispose(): void {
+    if (this.activeSession) {
+      this.activeSession.dispose();
+    }
+  }
+}
+
+class InlineChatSession {
+  private editor: vscode.TextEditor;
+  private ollamaService: OllamaService;
+  private fileManager: FileManager;
+  private originalPosition: vscode.Position;
+  private suggestionRange: vscode.Range | undefined;
+  private suggestionDecoration: vscode.TextEditorDecorationType;
+  private cursorDecoration: vscode.TextEditorDecorationType;
+  private conversationIndicator: vscode.TextEditorDecorationType;
+  private disposables: vscode.Disposable[] = [];
+  private isProcessing = false;
+  private chatHistory: { role: "user" | "assistant"; content: string }[] = [];
+  private isContinuingConversation = false;
+
+  constructor(
+    editor: vscode.TextEditor,
+    ollamaService: OllamaService,
+    fileManager: FileManager,
+  ) {
+    this.editor = editor;
+    this.ollamaService = ollamaService;
+    this.fileManager = fileManager;
+    this.originalPosition = editor.selection.active;
+
+    // Create decoration type for highlighting suggestions
+    this.suggestionDecoration = vscode.window.createTextEditorDecorationType({
+      backgroundColor: new vscode.ThemeColor(
+        "editor.findMatchHighlightBackground",
+      ),
+      border: "1px solid",
+      borderColor: new vscode.ThemeColor("editor.findMatchBorder"),
+      opacity: "0.8",
+    });
+
+    // Create decoration type for cursor indicator
+    this.cursorDecoration = vscode.window.createTextEditorDecorationType({
+      after: {
+        contentText: "💬",
+        color: new vscode.ThemeColor("editorCodeLens.foreground"),
+        margin: "0 0 0 5px",
+      },
+    });
+
+    // Create decoration type for conversation continuation indicator
+    this.conversationIndicator = vscode.window.createTextEditorDecorationType({
+      after: {
+        contentText: "🔄",
+        color: new vscode.ThemeColor("editorCodeLens.foreground"),
+        margin: "0 0 0 3px",
+      },
+    });
+  }
+
+  /**
+   * Start the inline chat session
+   */
+  public async start(): Promise<void> {
+    const editor = this.editor;
+    const document = editor.document;
+    const line = document.lineAt(this.originalPosition.line).text;
+
+    // Position where we'll insert our AI trigger indicator
+    const lineStartPos = new vscode.Position(this.originalPosition.line, 0);
+
+    // Check if this is a continuation of an existing conversation
+    const hasChatHistory = this.chatHistory.length > 0;
+    const continuationOptions = hasChatHistory
+      ? ["New conversation", "Continue previous conversation"]
+      : undefined;
+
+    let userInput: string;
+    let shouldContinue = false;
+
+    // If there's previous chat history, ask if user wants to continue or start fresh
+    if (hasChatHistory) {
+      const selection = await vscode.window.showQuickPick(
+        continuationOptions!,
+        {
+          placeHolder: "Would you like to continue the previous conversation?",
+        },
+      );
+
+      if (!selection) {
+        return; // User cancelled
+      }
+
+      shouldContinue = selection === "Continue previous conversation";
+      this.isContinuingConversation = shouldContinue;
+
+      if (!shouldContinue) {
+        // Clear chat history for a new conversation
+        this.chatHistory = [];
+      }
     }
 
-    // Dispose all disposables
-    this.disposables.forEach(d => d.dispose());
-    this.disposables = [];
+    // If line is empty or just whitespace, prompt for input
+    // Otherwise use the current line as input
+    if (!line.trim()) {
+      // Show input box for user request
+      const inputPrompt = shouldContinue
+        ? "Continue your conversation with AI..."
+        : "What would you like the AI to help with?";
 
-    this.isVisible = false;
-    this.pendingSuggestion = undefined;
-    this.setContext(false);
+      const userInputResult = await vscode.window.showInputBox({
+        placeHolder: inputPrompt,
+        prompt: "Enter your request",
+      });
+
+      if (!userInputResult) {
+        return; // User cancelled
+      }
+
+      userInput = userInputResult;
+
+      // Add visual indicator during processing
+      editor.setDecorations(this.cursorDecoration, [
+        {
+          range: new vscode.Range(lineStartPos, lineStartPos),
+          hoverMessage: "Processing your request...",
+        },
+      ]);
+
+      if (shouldContinue) {
+        // Add continuation indicator
+        editor.setDecorations(this.conversationIndicator, [
+          {
+            range: new vscode.Range(lineStartPos, lineStartPos),
+            hoverMessage: "Continuing conversation",
+          },
+        ]);
+      }
+    } else {
+      userInput = line.trim();
+
+      // Add visual indicator during processing
+      const endOfLine = new vscode.Position(
+        this.originalPosition.line,
+        line.length,
+      );
+      editor.setDecorations(this.cursorDecoration, [
+        {
+          range: new vscode.Range(endOfLine, endOfLine),
+          hoverMessage: "Processing your request...",
+        },
+      ]);
+    }
+
+    // Process the user's input
+    await this.processUserInput(userInput);
   }
 
   /**
-   * Check if inline chat is currently visible
+   * Process user input and generate suggestion
    */
-  public get visible(): boolean {
-    return this.isVisible;
-  }
-
-  /**
-   * Show inline chat input using VS Code's input box
-   */
-  private async showInlineChatInput(): Promise<void> {
-    if (!this.currentEditor || !this.currentPosition) {
+  private async processUserInput(userInput: string): Promise<void> {
+    if (this.isProcessing) {
       return;
     }
 
+    this.isProcessing = true;
+
+    // Add user message to chat history
+    this.chatHistory.push({ role: "user", content: userInput });
+
+    // Get context from current file and selection
+    const document = this.editor.document;
+    const selection = this.editor.selection;
+
+    let contextCode = "";
+    if (!selection.isEmpty) {
+      contextCode = document.getText(selection);
+    } else {
+      // Get surrounding context (20 lines before and after cursor)
+      const startLine = Math.max(0, this.originalPosition.line - 10);
+      const endLine = Math.min(
+        document.lineCount - 1,
+        this.originalPosition.line + 10,
+      );
+      const contextRange = new vscode.Range(
+        startLine,
+        0,
+        endLine,
+        document.lineAt(endLine).text.length,
+      );
+      contextCode = document.getText(contextRange);
+    }
+
+    // Prepare prompt with context and chat history
+    const prompt = this.createPrompt(
+      userInput,
+      contextCode,
+      document.languageId,
+    );
+
     try {
-      // Show input box for user query
-      const userInput = await vscode.window.showInputBox({
-        prompt: "What would you like me to help you with?",
-        placeHolder: "Ask about the code, request changes, or get suggestions...",
-        ignoreFocusOut: true
-      });
-
-      if (!userInput) {
-        await this.hideInlineChat();
-        return;
-      }
-
-      this.isVisible = true;
-
-      // Show progress while generating response
+      // Show progress
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "AI Assistant",
-          cancellable: true
+          title: "AI Assistant is thinking...",
+          cancellable: false,
         },
-        async (progress, token) => {
-          progress.report({ message: "Generating response..." });
+        async (progress) => {
+          // Get AI response
+          const response = await this.ollamaService.generateResponse(prompt);
 
-          // Get context around cursor
-          const context = this.getContextAroundCursor();
-          
-          // Generate AI response
-          const response = await this.ollamaService.getCodingHelp(
-            userInput,
-            context
-          );
+          // Add AI response to chat history
+          this.chatHistory.push({ role: "assistant", content: response });
 
-          if (token.isCancellationRequested) {
-            await this.hideInlineChat();
-            return;
+          // Extract code from response if it contains code blocks
+          const codeMatch = response.match(/```(?:\w+)?\n?([\s\S]*?)```/);
+          const suggestion = codeMatch ? codeMatch[1].trim() : response.trim();
+
+          if (suggestion) {
+            await this.showSuggestion(suggestion);
+          } else {
+            vscode.window.showInformationMessage("AI Assistant: " + response);
           }
-
-          // Handle the response
-          await this.handleAIResponse(response, userInput);
-        }
+        },
       );
-
     } catch (error) {
-      ErrorUtils.logError("InlineChatProvider.showInlineChatInput", error);
-      await this.hideInlineChat();
-      throw error;
+      console.error("[InlineChat] Error getting AI response:", error);
+      vscode.window.showErrorMessage(`Failed to get AI response: ${error}`);
+    } finally {
+      this.isProcessing = false;
     }
   }
 
   /**
-   * Handle AI response - either show as suggestion or insert directly
+   * Create prompt with context and chat history
    */
-  private async handleAIResponse(response: string, originalQuery: string): Promise<void> {
-    if (!this.currentEditor || !this.currentPosition) {
-      return;
+  private createPrompt(
+    userInput: string,
+    contextCode: string,
+    languageId: string,
+  ): string {
+    let historyText = "";
+
+    // Include chat history if continuing a conversation
+    if (this.isContinuingConversation && this.chatHistory.length > 1) {
+      // Get previous exchanges but exclude the latest user message (which we'll add explicitly)
+      const previousHistory = this.chatHistory.slice(0, -1);
+      historyText = previousHistory
+        .map(
+          (msg) =>
+            `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`,
+        )
+        .join("\n\n");
+
+      historyText = `\nPrevious conversation:\n${historyText}\n\n`;
     }
 
-    // Check if response looks like code that should be inserted
-    const isCodeSuggestion = this.isCodeSuggestion(response, originalQuery);
+    return `You are an AI coding assistant. The user is working in a ${languageId} file and has asked: "${userInput}"
 
-    if (isCodeSuggestion) {
-      // Show as inline suggestion
-      await this.showInlineSuggestion(response);
+Current code context:
+\`\`\`${languageId}
+${contextCode}
+\`\`\`
+${historyText}
+Please provide a helpful response. If you're suggesting code changes, provide only the code that should be inserted or replace the selected text. Keep your response concise and focused.`;
+  }
+
+  /**
+   * Show suggestion inline in the editor
+   */
+  private async showSuggestion(suggestion: string): Promise<void> {
+    const selection = this.editor.selection;
+
+    if (selection.isEmpty) {
+      // Insert at cursor position
+      const position = this.originalPosition;
+      await this.editor.edit((editBuilder) => {
+        editBuilder.insert(position, suggestion);
+      });
+
+      // Create range for the inserted text
+      const endPosition = position.translate(0, suggestion.length);
+      this.suggestionRange = new vscode.Range(position, endPosition);
     } else {
-      // Show as information/explanation
-      await this.showResponseAsInformation(response);
-    }
-  }
+      // Replace selected text
+      await this.editor.edit((editBuilder) => {
+        editBuilder.replace(selection, suggestion);
+      });
 
-  /**
-   * Show response as an inline code suggestion
-   */
-  private async showInlineSuggestion(suggestion: string): Promise<void> {
-    if (!this.currentEditor || !this.currentPosition) {
-      return;
+      // Create range for the replaced text
+      const endPosition = selection.start.translate(0, suggestion.length);
+      this.suggestionRange = new vscode.Range(selection.start, endPosition);
     }
 
-    this.pendingSuggestion = suggestion;
-
-    // Create decoration for the suggestion
-    this.currentDecoration = vscode.window.createTextEditorDecorationType({
-      after: {
-        contentText: ` ${suggestion.split('\n')[0]}...`,
-        color: new vscode.ThemeColor('editorGhostText.foreground'),
-        fontStyle: 'italic'
-      }
-    });
-
-    // Apply decoration
-    const range = new vscode.Range(this.currentPosition, this.currentPosition);
-    this.currentEditor.setDecorations(this.currentDecoration, [range]);
+    // Apply suggestion decoration
+    if (this.suggestionRange) {
+      this.editor.setDecorations(this.suggestionDecoration, [
+        this.suggestionRange,
+      ]);
+    }
 
     // Show action buttons
     const action = await vscode.window.showInformationMessage(
-      "AI suggestion ready",
+      "AI suggestion inserted at cursor",
       { modal: false },
       "Accept",
       "Reject",
-      "View Full"
+      "Regenerate",
+      "Continue to iterate?",
     );
 
-    switch (action) {
-      case "Accept":
-        await this.acceptSuggestion();
-        break;
-      case "Reject":
-        await this.rejectSuggestion();
-        break;
-      case "View Full":
-        await this.showFullResponse(suggestion);
-        break;
-      default:
-        await this.hideInlineChat();
+    if (action === "Accept") {
+      await this.acceptSuggestion();
+    } else if (action === "Reject") {
+      this.rejectSuggestion();
+    } else if (action === "Regenerate") {
+      this.rejectSuggestion();
+      // Remove the last user and assistant messages
+      if (this.chatHistory.length >= 2) {
+        this.chatHistory = this.chatHistory.slice(0, -2);
+      }
+      // Start new session for regeneration
+      setTimeout(() => {
+        vscode.commands.executeCommand("ai-assistant.startInlineChat");
+      }, 100);
+    } else if (action === "Continue to iterate?") {
+      // Accept the current suggestion
+      await this.acceptSuggestion();
+
+      // Set flag to continue conversation
+      this.isContinuingConversation = true;
+
+      // Show input box for follow-up question
+      const followUp = await vscode.window.showInputBox({
+        prompt: "Follow-up question:",
+        placeHolder: "Enter your follow-up...",
+      });
+
+      if (followUp) {
+        await this.processUserInput(followUp);
+      }
     }
   }
 
   /**
-   * Show response as information (not code)
+   * Accept the current suggestion
    */
-  private async showResponseAsInformation(response: string): Promise<void> {
-    const action = await vscode.window.showInformationMessage(
-      "AI Assistant Response",
-      { modal: false },
-      "View Response",
-      "Dismiss"
-    );
+  public async acceptSuggestion(): Promise<void> {
+    // Clear decoration
+    this.editor.setDecorations(this.suggestionDecoration, []);
 
-    if (action === "View Response") {
-      await this.showFullResponse(response);
+    // Move cursor to end of suggestion
+    if (this.suggestionRange) {
+      const newPosition = this.suggestionRange.end;
+      this.editor.selection = new vscode.Selection(newPosition, newPosition);
     }
 
-    await this.hideInlineChat();
+    vscode.window.showInformationMessage("✅ AI suggestion accepted");
   }
 
   /**
-   * Show full AI response in a new document
+   * Reject the current suggestion
    */
-  private async showFullResponse(response: string): Promise<void> {
-    const doc = await vscode.workspace.openTextDocument({
-      content: response,
-      language: 'markdown'
-    });
-    await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
-    await this.hideInlineChat();
-  }
+  public rejectSuggestion(): void {
+    if (this.suggestionRange) {
+      // Remove the suggested text
+      this.editor.edit((editBuilder) => {
+        editBuilder.delete(this.suggestionRange!);
+      });
 
-  /**
-   * Get context lines around the cursor position
-   */
-  private getContextAroundCursor(): string {
-    if (!this.currentEditor || !this.currentPosition) {
-      return '';
+      // Clear decoration
+      this.editor.setDecorations(this.suggestionDecoration, []);
+
+      // Restore original cursor position
+      this.editor.selection = new vscode.Selection(
+        this.originalPosition,
+        this.originalPosition,
+      );
     }
 
-    const document = this.currentEditor.document;
-    const startLine = Math.max(0, this.currentPosition.line - 10);
-    const endLine = Math.min(document.lineCount - 1, this.currentPosition.line + 10);
-    
-    let context = '';
-    for (let i = startLine; i <= endLine; i++) {
-      const line = document.lineAt(i);
-      const marker = i === this.currentPosition.line ? ' <<< CURSOR HERE' : '';
-      context += `${i + 1}: ${line.text}${marker}\n`;
-    }
-    
-    return context;
+    vscode.window.showInformationMessage("❌ AI suggestion rejected");
   }
 
   /**
-   * Determine if response is a code suggestion
-   */
-  private isCodeSuggestion(response: string, query: string): boolean {
-    // Simple heuristics to determine if this is code
-    const codeIndicators = [
-      'function', 'class', 'const', 'let', 'var', 'if', 'for', 'while',
-      'import', 'export', 'def', 'public', 'private', 'return'
-    ];
-    
-    const queryLowerCase = query.toLowerCase();
-    const responseLowerCase = response.toLowerCase();
-    
-    // If query asks for code generation/modification
-    const isCodeQuery = queryLowerCase.includes('write') || 
-                       queryLowerCase.includes('generate') ||
-                       queryLowerCase.includes('create') ||
-                       queryLowerCase.includes('add') ||
-                       queryLowerCase.includes('implement');
-    
-    // If response contains code indicators
-    const hasCodeIndicators = codeIndicators.some(indicator => 
-      responseLowerCase.includes(indicator)
-    );
-    
-    // If response has code blocks
-    const hasCodeBlocks = response.includes('```') || response.includes('`');
-    
-    return isCodeQuery && (hasCodeIndicators || hasCodeBlocks);
-  }
-
-  /**
-   * Set context for when inline chat is active
-   */
-  private setContext(active: boolean): void {
-    vscode.commands.executeCommand('setContext', 'aiAssistant.inlineChatActive', active);
-  }
-
-  /**
-   * Dispose of resources
+   * Dispose all resources
    */
   public dispose(): void {
-    this.hideInlineChat();
+    // Clear any decorations
+    this.editor.setDecorations(this.suggestionDecoration, []);
+    this.editor.setDecorations(this.cursorDecoration, []);
+
+    // Dispose decoration types
+    this.suggestionDecoration.dispose();
+    this.cursorDecoration.dispose();
+
+    // Dispose all other resources
+    this.disposables.forEach((d) => d.dispose());
+    this.disposables = [];
   }
+}
+
+/**
+ * Register inline completion provider for AI chat suggestions
+ */
+export function registerInlineCompletions(
+  context: vscode.ExtensionContext,
+  ollamaService: OllamaService,
+  fileManager: FileManager,
+) {
+  const provider: vscode.InlineCompletionItemProvider = {
+    async provideInlineCompletionItems(
+      document: vscode.TextDocument,
+      position: vscode.Position,
+      _context: vscode.InlineCompletionContext,
+      _token: vscode.CancellationToken,
+    ) {
+      // No longer trigger based on "// ai:" prefix
+      // Instead, trigger when the user presses the assigned keyboard shortcut
+
+      // Assemble context code (10 lines before and after)
+      const startLine = Math.max(0, position.line - 10);
+      const endLine = Math.min(document.lineCount - 1, position.line + 10);
+      const contextRange = new vscode.Range(
+        startLine,
+        0,
+        endLine,
+        document.lineAt(endLine).text.length,
+      );
+      const contextCode = document.getText(contextRange);
+
+      // Get current line as the user input
+      const lineText = document.lineAt(position.line).text.trim();
+
+      if (!lineText) {
+        return { items: [] };
+      }
+
+      // Prepare prompt
+      const prompt =
+        `You are an AI coding assistant. The user has asked: "${lineText}"\n\n` +
+        `Context around line ${position.line + 1}:\n` +
+        "```" +
+        document.languageId +
+        "\n" +
+        contextCode +
+        "\n```";
+
+      let suggestionText = "";
+      try {
+        const response = await ollamaService.generateResponse(prompt);
+        const codeMatch = response.match(/```(?:\w+)?\n?([\s\S]*?)```/);
+        suggestionText = (codeMatch ? codeMatch[1] : response).trim();
+      } catch (error) {
+        console.error("InlineCompletions error:", error);
+        return { items: [] };
+      }
+
+      if (!suggestionText) {
+        return { items: [] };
+      }
+
+      const item = new vscode.InlineCompletionItem(
+        suggestionText,
+        new vscode.Range(position, position),
+      );
+      return { items: [item] };
+    },
+  };
+  context.subscriptions.push(
+    vscode.languages.registerInlineCompletionItemProvider(
+      { pattern: "**" },
+      provider,
+    ),
+  );
 }

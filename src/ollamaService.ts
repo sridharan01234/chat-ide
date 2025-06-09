@@ -223,6 +223,68 @@ export class OllamaService {
   }
 
   /**
+   * Generate a response using Ollama with conversation history
+   */
+  public async generateChatResponse(
+    messages: OllamaMessage[],
+    model?: string,
+  ): Promise<string> {
+    if (!this.isConnected) {
+      const connected = await this.checkConnection();
+      if (!connected) {
+        throw new Error(
+          "Cannot connect to Ollama server. Make sure Ollama is running on " +
+            this.baseUrl,
+        );
+      }
+    }
+
+    const modelToUse = model || this.defaultModel;
+
+    // Verify model is available
+    if (
+      this.availableModels.length > 0 &&
+      !this.availableModels.includes(modelToUse)
+    ) {
+      console.warn(
+        `[OllamaService] Model ${modelToUse} not found. Available models:`,
+        this.availableModels,
+      );
+      // Try to use the first available model as fallback
+      if (this.availableModels.length > 0) {
+        const fallbackModel = this.availableModels[0];
+        console.log(`[OllamaService] Using fallback model: ${fallbackModel}`);
+        return this.generateChatResponse(messages, fallbackModel);
+      }
+    }
+
+    try {
+      const response: AxiosResponse<OllamaResponse> = await this.client.post(
+        "/api/chat",
+        {
+          model: modelToUse,
+          messages: messages,
+          stream: false,
+          options: {
+            temperature: 0.7,
+            top_p: 0.9,
+            top_k: 40,
+          },
+        },
+      );
+
+      if (response.data && response.data.message) {
+        return response.data.message.content.trim();
+      } else {
+        throw new Error("Invalid response format from Ollama");
+      }
+    } catch (error: any) {
+      console.error("[OllamaService] Error generating chat response:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Generate a code analysis response
    */
   public async analyzeCode(
@@ -262,6 +324,31 @@ Be concise but thorough in your analysis. Use markdown formatting for better rea
 Include code examples when appropriate and explain concepts clearly. Use markdown formatting for better readability.`;
 
     return this.generateResponse(question, context, model, systemPrompt);
+  }
+
+  /**
+   * Get code completion (for inline and panel completions)
+   */
+  public async getCompletion(
+    prompt: string,
+    fileReferences: any[],
+    model?: string,
+  ): Promise<string> {
+    // Build context from file references
+    let context = "";
+    if (fileReferences && fileReferences.length > 0) {
+      context = fileReferences
+        .map((ref) => {
+          const content = ref.selectedText || ref.content;
+          return `File: ${ref.fileName}\n\`\`\`${ref.language}\n${content}\n\`\`\``;
+        })
+        .join("\n\n");
+    }
+
+    const systemPrompt = `You are an AI coding assistant. Provide concise, accurate, and helpful code completions or answers to programming questions.
+Focus on writing clean, efficient, and well-documented code. When providing code snippets, ensure they are properly formatted and ready to use.`;
+
+    return this.generateResponse(prompt, context, model, systemPrompt);
   }
 
   /**

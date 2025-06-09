@@ -17,9 +17,14 @@ import { ChatProvider } from "./chatProvider";
 import { DropZoneProvider, FileTreeDataProvider } from "./providers";
 import { FileManager, FileAttachmentManager } from "./fileManager";
 import { OllamaService } from "./ollamaService";
-import { InlineChatProvider } from "./inlineChatProvider";
+import {
+  InlineChatProvider,
+  registerInlineCompletions,
+} from "./inlineChatProvider";
+import { GhostChatProvider } from "./ghostChatProvider";
 import { ErrorUtils, FileUtils } from "./utils";
 import { DEFAULT_CONFIG } from "./types";
+import { CopilotPanel } from "./copilotPanel";
 
 /**
  * Extension activation function
@@ -43,10 +48,18 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     const inlineChatProvider = InlineChatProvider.getInstance(
-      context.extensionUri,
       ollamaService,
       fileManager,
     );
+
+    // Initialize Ghost Chat provider
+    const ghostChatProvider = GhostChatProvider.getInstance(
+      ollamaService,
+      fileManager,
+    );
+
+    // Initialize Copilot-style panel
+    const copilotPanel = CopilotPanel.getInstance(ollamaService, fileManager);
 
     const dropZoneProvider = new DropZoneProvider(async (uri: vscode.Uri) => {
       try {
@@ -71,7 +84,20 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Register commands
-    registerCommands(context, chatProvider, fileManager, fileAttachmentManager, inlineChatProvider);
+    registerCommands(
+      context,
+      chatProvider,
+      fileManager,
+      fileAttachmentManager,
+      inlineChatProvider,
+      ghostChatProvider,
+    );
+
+    // Register Copilot panel commands
+    CopilotPanel.registerCommands(context, copilotPanel);
+
+    // Register inline completions
+    registerInlineCompletions(context, ollamaService, fileManager);
 
     // Set up event listeners
     setupEventListeners(context, fileTreeDataProvider);
@@ -121,11 +147,7 @@ function registerProviders(
     canSelectMany: true,
   });
 
-  context.subscriptions.push(
-    webviewProvider,
-    dropZoneTreeView,
-    fileTreeView,
-  );
+  context.subscriptions.push(webviewProvider, dropZoneTreeView, fileTreeView);
   console.log("[Extension] Providers registered successfully");
 }
 
@@ -138,6 +160,7 @@ function registerCommands(
   fileManager: FileManager,
   fileAttachmentManager: FileAttachmentManager,
   inlineChatProvider: InlineChatProvider,
+  ghostChatProvider: GhostChatProvider,
 ): void {
   const commands = [
     // Basic chat commands
@@ -216,6 +239,25 @@ function registerCommands(
       "ai-assistant.rejectInlineChat",
       async () => {
         await inlineChatProvider.rejectSuggestion();
+      },
+    ),
+
+    // Ghost chat commands
+    vscode.commands.registerCommand("ai-assistant.startGhostChat", async () => {
+      await ghostChatProvider.startGhostChat();
+    }),
+
+    vscode.commands.registerCommand(
+      "ai-assistant.acceptGhostChat",
+      async () => {
+        await ghostChatProvider.acceptSuggestion();
+      },
+    ),
+
+    vscode.commands.registerCommand(
+      "ai-assistant.rejectGhostChat",
+      async () => {
+        await ghostChatProvider.rejectSuggestion();
       },
     ),
   ];

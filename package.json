@@ -101,6 +101,36 @@
         "command": "ai-assistant.rejectInlineChat",
         "title": "Reject Inline Chat Suggestion",
         "icon": "$(close)"
+      },
+      {
+        "command": "ai-assistant.showCopilotPanel",
+        "title": "Show Copilot-style Input Panel",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "ai-assistant.showCopilotGhostMode",
+        "title": "Show Ghost Mode at Cursor",
+        "icon": "$(ghost)"
+      },
+      {
+        "command": "ai-assistant.startGhostChat",
+        "title": "Start Ghost Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "ai-assistant.acceptGhostChat",
+        "title": "Accept Ghost Chat Suggestion",
+        "icon": "$(check)"
+      },
+      {
+        "command": "ai-assistant.rejectGhostChat",
+        "title": "Reject Ghost Chat Suggestion",
+        "icon": "$(close)"
+      },
+      {
+        "command": "ai-assistant.closeCopilotPanel",
+        "title": "Close Copilot-style Input Panel",
+        "icon": "$(close)"
       }
     ],
     "menus": {
@@ -165,6 +195,21 @@
           "command": "ai-assistant.startInlineChat",
           "when": "editorTextFocus",
           "group": "aiassistant@2"
+        },
+        {
+          "command": "ai-assistant.startGhostChat",
+          "when": "editorTextFocus",
+          "group": "aiassistant@2"
+        },
+        {
+          "command": "ai-assistant.showCopilotPanel",
+          "when": "editorTextFocus",
+          "group": "aiassistant@3"
+        },
+        {
+          "command": "ai-assistant.showCopilotGhostMode",
+          "when": "editorTextFocus",
+          "group": "aiassistant@3"
         }
       ],
       "editor/title/context": [
@@ -205,17 +250,56 @@
       {
         "command": "ai-assistant.startInlineChat",
         "key": "ctrl+i",
-        "mac": "cmd+i"
+        "mac": "cmd+i",
+        "when": "editorTextFocus"
       },
       {
         "command": "ai-assistant.acceptInlineChat",
         "key": "tab",
-        "when": "inlineChatVisible"
+        "when": "inlineSuggestionVisible"
       },
       {
         "command": "ai-assistant.rejectInlineChat",
         "key": "escape",
-        "when": "inlineChatVisible"
+        "when": "inlineSuggestionVisible"
+      },
+      {
+        "command": "extension.escapeInlineInput",
+        "key": "escape",
+        "when": "inlineInputActive"
+      },
+      {
+        "command": "ai-assistant.showCopilotPanel",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ai-assistant.showCopilotGhostMode",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ai-assistant.startGhostChat",
+        "key": "ctrl+k",
+        "mac": "cmd+k",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ai-assistant.acceptGhostChat",
+        "key": "tab",
+        "when": "ghostChatActive"
+      },
+      {
+        "command": "ai-assistant.rejectGhostChat",
+        "key": "escape",
+        "when": "ghostChatActive"
+      },
+      {
+        "command": "ai-assistant.closeCopilotPanel",
+        "key": "escape",
+        "when": "copilotPanelVisible"
       }
     ]
   },
