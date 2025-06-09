@@ -53,11 +53,6 @@
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "ai-assistant.clearChat",
-        "title": "Clear Chat",
-        "icon": "$(clear-all)"
-      },
-      {
         "command": "ai-assistant.newChat",
         "title": "New Chat",
         "icon": "$(add)"
@@ -66,11 +61,6 @@
         "command": "ai-assistant.attachActiveFile",
         "title": "Attach Active File to Chat",
         "icon": "$(file-add)"
-      },
-      {
-        "command": "ai-assistant.browseFiles",
-        "title": "Browse and Attach File",
-        "icon": "$(folder-opened)"
       },
       {
         "command": "ai-assistant.attachSelection",
@@ -108,26 +98,6 @@
         "icon": "$(sparkle)"
       },
       {
-        "command": "ai-assistant.showCopilotGhostMode",
-        "title": "Show Ghost Mode at Cursor",
-        "icon": "$(ghost)"
-      },
-      {
-        "command": "ai-assistant.startGhostChat",
-        "title": "Start Ghost Chat",
-        "icon": "$(comment-discussion)"
-      },
-      {
-        "command": "ai-assistant.acceptGhostChat",
-        "title": "Accept Ghost Chat Suggestion",
-        "icon": "$(check)"
-      },
-      {
-        "command": "ai-assistant.rejectGhostChat",
-        "title": "Reject Ghost Chat Suggestion",
-        "icon": "$(close)"
-      },
-      {
         "command": "ai-assistant.closeCopilotPanel",
         "title": "Close Copilot-style Input Panel",
         "icon": "$(close)"
@@ -141,11 +111,6 @@
           "group": "navigation@0"
         },
         {
-          "command": "ai-assistant.browseFiles",
-          "when": "view == aiAssistantChat",
-          "group": "navigation@0"
-        },
-        {
           "command": "ai-assistant.attachMultipleFiles",
           "when": "view == aiAssistantChat",
           "group": "navigation@0"
@@ -154,11 +119,6 @@
           "command": "ai-assistant.newChat",
           "when": "view == aiAssistantChat",
           "group": "navigation@1"
-        },
-        {
-          "command": "ai-assistant.clearChat",
-          "when": "view == aiAssistantChat",
-          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -197,17 +157,7 @@
           "group": "aiassistant@2"
         },
         {
-          "command": "ai-assistant.startGhostChat",
-          "when": "editorTextFocus",
-          "group": "aiassistant@2"
-        },
-        {
           "command": "ai-assistant.showCopilotPanel",
-          "when": "editorTextFocus",
-          "group": "aiassistant@3"
-        },
-        {
-          "command": "ai-assistant.showCopilotGhostMode",
           "when": "editorTextFocus",
           "group": "aiassistant@3"
         }
@@ -273,28 +223,6 @@
         "key": "ctrl+shift+c",
         "mac": "cmd+shift+c",
         "when": "editorTextFocus"
-      },
-      {
-        "command": "ai-assistant.showCopilotGhostMode",
-        "key": "ctrl+shift+g",
-        "mac": "cmd+shift+g",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "ai-assistant.startGhostChat",
-        "key": "ctrl+k",
-        "mac": "cmd+k",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "ai-assistant.acceptGhostChat",
-        "key": "tab",
-        "when": "ghostChatActive"
-      },
-      {
-        "command": "ai-assistant.rejectGhostChat",
-        "key": "escape",
-        "when": "ghostChatActive"
       },
       {
         "command": "ai-assistant.closeCopilotPanel",

@@ -21,8 +21,7 @@ import {
   InlineChatProvider,
   registerInlineCompletions,
 } from "./inlineChatProvider";
-import { GhostChatProvider } from "./ghostChatProvider";
-import { ErrorUtils, FileUtils } from "./utils";
+import { ErrorUtils } from "./utils";
 import { DEFAULT_CONFIG } from "./types";
 import { CopilotPanel } from "./copilotPanel";
 
@@ -49,13 +48,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     const inlineChatProvider = InlineChatProvider.getInstance(
       ollamaService,
-      fileManager,
-    );
-
-    // Initialize Ghost Chat provider
-    const ghostChatProvider = GhostChatProvider.getInstance(
-      ollamaService,
-      fileManager,
     );
 
     // Initialize Copilot-style panel
@@ -90,14 +82,13 @@ export function activate(context: vscode.ExtensionContext) {
       fileManager,
       fileAttachmentManager,
       inlineChatProvider,
-      ghostChatProvider,
     );
 
     // Register Copilot panel commands
     CopilotPanel.registerCommands(context, copilotPanel);
 
     // Register inline completions
-    registerInlineCompletions(context, ollamaService, fileManager);
+    registerInlineCompletions(context, ollamaService);
 
     // Set up event listeners
     setupEventListeners(context, fileTreeDataProvider);
@@ -160,17 +151,11 @@ function registerCommands(
   fileManager: FileManager,
   fileAttachmentManager: FileAttachmentManager,
   inlineChatProvider: InlineChatProvider,
-  ghostChatProvider: GhostChatProvider,
 ): void {
   const commands = [
     // Basic chat commands
     vscode.commands.registerCommand("ai-assistant.openChat", () => {
       vscode.commands.executeCommand("workbench.view.extension.ai-assistant");
-    }),
-
-    vscode.commands.registerCommand("ai-assistant.clearChat", () => {
-      chatProvider.clearMessages();
-      vscode.window.showInformationMessage("Chat cleared");
     }),
 
     vscode.commands.registerCommand("ai-assistant.newChat", () => {
@@ -187,10 +172,6 @@ function registerCommands(
       },
     ),
 
-    vscode.commands.registerCommand("ai-assistant.browseFiles", async () => {
-      await handleBrowseAndAttachFile(fileManager, fileAttachmentManager);
-    }),
-
     vscode.commands.registerCommand(
       "ai-assistant.attachSelection",
       async () => {
@@ -198,7 +179,7 @@ function registerCommands(
       },
     ),
 
-    // Multiple file attachment command
+    // Multiple file attachment command (supports single files too)
     vscode.commands.registerCommand(
       "ai-assistant.attachMultipleFiles",
       async () => {
@@ -239,25 +220,6 @@ function registerCommands(
       "ai-assistant.rejectInlineChat",
       async () => {
         await inlineChatProvider.rejectSuggestion();
-      },
-    ),
-
-    // Ghost chat commands
-    vscode.commands.registerCommand("ai-assistant.startGhostChat", async () => {
-      await ghostChatProvider.startGhostChat();
-    }),
-
-    vscode.commands.registerCommand(
-      "ai-assistant.acceptGhostChat",
-      async () => {
-        await ghostChatProvider.acceptSuggestion();
-      },
-    ),
-
-    vscode.commands.registerCommand(
-      "ai-assistant.rejectGhostChat",
-      async () => {
-        await ghostChatProvider.rejectSuggestion();
       },
     ),
   ];
@@ -318,50 +280,6 @@ async function handleAttachSelectedText(
     fileAttachmentManager.stageFile(fileReference);
   } catch (error) {
     ErrorUtils.logError("Extension.handleAttachSelectedText", error);
-    vscode.window.showErrorMessage(ErrorUtils.createUserFriendlyError(error));
-  }
-}
-
-/**
- * Handles browsing and attaching a file
- */
-async function handleBrowseAndAttachFile(
-  fileManager: FileManager,
-  fileAttachmentManager: FileAttachmentManager,
-): Promise<void> {
-  const fileUris = await vscode.window.showOpenDialog({
-    canSelectFiles: true,
-    canSelectFolders: false,
-    canSelectMany: false,
-    title: "Select a file to attach",
-    filters: {
-      "Code Files": [
-        "js",
-        "ts",
-        "py",
-        "java",
-        "cpp",
-        "c",
-        "cs",
-        "php",
-        "rb",
-        "go",
-        "rs",
-      ],
-      "Web Files": ["html", "css", "scss", "sass", "less", "vue", "jsx", "tsx"],
-      "Data Files": ["json", "xml", "yaml", "yml", "csv", "sql"],
-      Documentation: ["md", "txt", "rst"],
-      "All Files": ["*"],
-    },
-  });
-
-  if (!fileUris?.length) return;
-
-  try {
-    const fileReferences = await fileManager.processDroppedUri(fileUris[0]);
-    fileAttachmentManager.stageFiles(fileReferences);
-  } catch (error) {
-    ErrorUtils.logError("Extension.handleBrowseAndAttachFile", error);
     vscode.window.showErrorMessage(ErrorUtils.createUserFriendlyError(error));
   }
 }
