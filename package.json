@@ -6,6 +6,9 @@
   "engines": {
     "vscode": "^1.80.0"
   },
+  "enabledApiProposals": [
+    "editorInsets"
+  ],
   "categories": [
     "Other"
   ],

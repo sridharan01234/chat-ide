@@ -20,7 +20,17 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 - **Context-Aware Suggestions** - Automatically includes surrounding code context
 - **Multi-line Support** - Handles complex code suggestions with proper formatting
 
-### 📁 Advanced File Attachment
+### � Inline Chat with WebviewEditorInset (LATEST!)
+
+- **True Inline Input** - Input box appears directly above your cursor using VS Code's proposed API
+- **Native Integration** - Seamlessly integrated into the editor with proper theming
+- **Contextual AI Assistance** - Ask questions about your code without leaving the editor
+- **Smart Code Insertion** - AI responses are inserted with syntax highlighting and proper formatting
+- **Accept/Reject Workflow** - Preview and choose whether to accept AI suggestions
+- **Fallback Support** - Gracefully falls back to input box if WebviewEditorInset API is unavailable
+- **Keyboard Navigation** - `Ctrl+I` to start, `Enter` to send, `Escape` to cancel
+
+### �📁 Advanced File Attachment
 
 - **Drag & Drop from VS Code Explorer** - Seamlessly drag files from the file explorer
 - **Editor Tab Integration** - Drop files directly from open editor tabs
@@ -45,7 +55,23 @@ A powerful VS Code extension that provides an intelligent chat interface with ad
 - **Command Palette Integration** - Quick access via Command Palette
 - **Status Bar Integration** - Easy access from the status bar
 
-## 🚀 Installation
+## � Requirements
+
+### For Full Feature Support (Including WebviewEditorInset Inline Chat)
+
+- **VS Code**: Version 1.80.0 or higher
+- **Proposed API Support**: For the latest inline chat feature using WebviewEditorInset
+  - VS Code Insiders (recommended for latest proposed APIs)
+  - Or VS Code stable with experimental features enabled
+
+### For Basic Features
+
+- **VS Code**: Version 1.80.0 or higher
+- All features except WebviewEditorInset inline chat will work with standard VS Code installation
+
+**Note**: The extension automatically detects API availability and gracefully falls back to compatible alternatives when proposed APIs are not available.
+
+## �🚀 Installation
 
 ### From Source (Development)
 
@@ -133,6 +159,7 @@ Open Editor Tab → Drag tab → Drop into chat area
 | Command | Shortcut | Description |
 |---------|----------|-------------|
 | `AI Assistant: Open Chat` | `Ctrl+Shift+A` | Open main chat interface |
+| `AI Assistant: Start Inline Chat` | `Ctrl+I` (or `Cmd+I`) | Start inline chat with WebviewEditorInset |
 | `AI Assistant: Start Ghost Chat` | `Ctrl+K` (or `Cmd+K`) | Start cursor-positioned AI chat |
 | `AI Assistant: Accept Ghost Chat` | `Tab` | Accept AI suggestion (when active) |
 | `AI Assistant: Reject Ghost Chat` | `Escape` | Reject AI suggestion (when active) |
