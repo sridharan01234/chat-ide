@@ -1,12 +1,12 @@
 # AI Code Assistant - VS Code Extension
 
-A powerful VS Code extension that provides an intelligent chat interface with advanced drag-and-drop file attachment capabilities for seamless code analysis and developer assistance.
+A powerful VS Code extension powered by OpenAI that provides an intelligent chat interface with advanced drag-and-drop file attachment capabilities for seamless code analysis and developer assistance.
 
 ## ✨ Features
 
-### 🎯 Intelligent Chat Interface
+### 🎯 OpenAI-Powered Chat Interface
 
-- **AI-Powered Responses** - Contextual assistance for code review, debugging, and explanations
+- **GPT-4 & GPT-3.5 Support** - Contextual assistance using OpenAI's latest models
 - **Real-time Messaging** - Instant chat interface with message history
 - **File Context Awareness** - Analyzes attached files to provide targeted insights
 - **Markdown Support** - Rich text formatting in messages
@@ -284,6 +284,41 @@ The extension is optimized for:
 - **Memory efficiency** - Caches DOM elements and processes files incrementally
 - **Fast response times** - Asynchronous file processing
 - **Minimal resource usage** - Efficient event handling and cleanup
+
+## 🤖 OpenAI Configuration
+
+This extension uses OpenAI's GPT models to provide AI assistance.
+
+### Setup Steps
+
+1. **Get OpenAI API Key**
+   - Visit [OpenAI Platform](https://platform.openai.com)
+   - Create an account and generate an API key
+
+2. **Configure Extension**
+   - Method 1: Use VS Code Settings
+     ```json
+     {
+       "ai-assistant.openaiApiKey": "sk-your-api-key-here",
+       "ai-assistant.model": "gpt-3.5-turbo"
+     }
+     ```
+   
+   - Method 2: Use Command Palette
+     - Open Command Palette (`Ctrl+Shift+P`)
+     - Run "AI Assistant: Configure OpenAI API Key"
+     - Enter your API key when prompted
+
+### Supported Models
+
+**OpenAI Models:**
+- gpt-4, gpt-4-turbo, gpt-3.5-turbo, gpt-4o, gpt-4o-mini
+
+### Status Indicator
+
+Check the status bar at the bottom right of VS Code:
+- `AI: OPENAI` (connected)
+- `AI: OPENAI (disconnected)` (connection issue)
 
 ## 🐛 Troubleshooting
 

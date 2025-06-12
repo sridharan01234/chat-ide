@@ -5,7 +5,7 @@
  */
 
 import * as vscode from "vscode";
-import { OllamaService } from "./ollamaService";
+import { AIService } from "./aiService";
 
 // Extend vscode types to include proposed API
 declare module 'vscode' {
@@ -30,20 +30,20 @@ declare module 'vscode' {
 
 export class InlineChatProvider {
   private static instance: InlineChatProvider;
-  private ollamaService: OllamaService;
+  private aiService: AIService;
   private activeSession: InlineInputSession | undefined;
   private disposables: vscode.Disposable[] = [];
 
-  private constructor(ollamaService: OllamaService) {
-    this.ollamaService = ollamaService;
+  private constructor(aiService: AIService) {
+    this.aiService = aiService;
   }
 
   public static getInstance(
-    ollamaService: OllamaService,
+    aiService: AIService,
   ): InlineChatProvider {
     if (!InlineChatProvider.instance) {
       InlineChatProvider.instance = new InlineChatProvider(
-        ollamaService,
+        aiService,
       );
     }
     return InlineChatProvider.instance;
@@ -69,7 +69,7 @@ export class InlineChatProvider {
       this.activeSession = new InlineInputSession(
         editor,
         position,
-        this.ollamaService
+        this.aiService
       );
 
       await this.activeSession.start();
@@ -120,7 +120,7 @@ export class InlineChatProvider {
 class InlineInputSession {
   private editor: vscode.TextEditor;
   private position: vscode.Position;
-  private ollamaService: OllamaService;
+  private aiService: AIService;
   private webviewInset: vscode.WebviewEditorInset | undefined;
   private disposables: vscode.Disposable[] = [];
   private isProcessing = false;
@@ -129,11 +129,11 @@ class InlineInputSession {
   constructor(
     editor: vscode.TextEditor,
     position: vscode.Position,
-    ollamaService: OllamaService
+    aiService: AIService
   ) {
     this.editor = editor;
     this.position = position;
-    this.ollamaService = ollamaService;
+    this.aiService = aiService;
   }
 
   /**
@@ -356,7 +356,7 @@ class InlineInputSession {
       const prompt = this.createPrompt(userInput, context);
 
       // Get AI response
-      const response = await this.ollamaService.generateResponse(prompt);
+      const response = await this.aiService.generateResponse(prompt);
 
       if (response) {
         await this.showSuggestion(response);
@@ -636,7 +636,7 @@ Please provide a helpful response. If you're suggesting code changes, provide on
  */
 export function registerInlineCompletions(
   context: vscode.ExtensionContext,
-  ollamaService: OllamaService,
+  aiService: AIService,
 ) {
   const provider: vscode.InlineCompletionItemProvider = {
     async provideInlineCompletionItems(
@@ -675,7 +675,7 @@ export function registerInlineCompletions(
 
       let suggestionText = "";
       try {
-        const response = await ollamaService.generateResponse(prompt);
+        const response = await aiService.generateResponse(prompt);
         const codeMatch = response.match(/```(?:\w+)?\n?([\s\S]*?)```/);
         suggestionText = (codeMatch ? codeMatch[1] : response).trim();
       } catch (error) {

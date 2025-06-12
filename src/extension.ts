@@ -16,7 +16,7 @@ import * as vscode from "vscode";
 import { ChatProvider } from "./chatProvider";
 import { DropZoneProvider, FileTreeDataProvider } from "./providers";
 import { FileManager, FileAttachmentManager } from "./fileManager";
-import { OllamaService } from "./ollamaService";
+import { AIService } from "./aiService";
 import {
   InlineChatProvider,
   registerInlineCompletions,
@@ -36,22 +36,22 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize services
     const fileManager = new FileManager(DEFAULT_CONFIG);
     const fileAttachmentManager = new FileAttachmentManager();
-    const ollamaService = new OllamaService();
+    const aiService = new AIService();
 
     // Initialize core providers
     const chatProvider = new ChatProvider(
       context.extensionUri,
       fileManager,
       fileAttachmentManager,
-      ollamaService,
+      aiService,
     );
 
     const inlineChatProvider = InlineChatProvider.getInstance(
-      ollamaService,
+      aiService,
     );
 
     // Initialize Copilot-style panel
-    const copilotPanel = CopilotPanel.getInstance(ollamaService, fileManager);
+    const copilotPanel = CopilotPanel.getInstance(aiService, fileManager);
 
     const dropZoneProvider = new DropZoneProvider(async (uri: vscode.Uri) => {
       try {
@@ -82,19 +82,20 @@ export function activate(context: vscode.ExtensionContext) {
       fileManager,
       fileAttachmentManager,
       inlineChatProvider,
+      aiService,
     );
 
     // Register Copilot panel commands
     CopilotPanel.registerCommands(context, copilotPanel);
 
     // Register inline completions
-    registerInlineCompletions(context, ollamaService);
+    registerInlineCompletions(context, aiService);
 
     // Set up event listeners
     setupEventListeners(context, fileTreeDataProvider);
 
     // Create status bar item
-    createStatusBarItem(context);
+    createStatusBarItem(context, aiService);
 
     console.log("[Extension] AI Code Assistant activated successfully!");
   } catch (error) {
@@ -151,6 +152,7 @@ function registerCommands(
   fileManager: FileManager,
   fileAttachmentManager: FileAttachmentManager,
   inlineChatProvider: InlineChatProvider,
+  aiService: AIService,
 ): void {
   const commands = [
     // Basic chat commands
@@ -220,6 +222,35 @@ function registerCommands(
       "ai-assistant.rejectInlineChat",
       async () => {
         await inlineChatProvider.rejectSuggestion();
+      },
+    ),
+
+    // OpenAI configuration commands
+    vscode.commands.registerCommand(
+      "ai-assistant.configureOpenAI",
+      async () => {
+        const apiKey = await vscode.window.showInputBox({
+          prompt: "Enter your OpenAI API key",
+          password: true,
+          placeHolder: "sk-...",
+        });
+        
+        if (apiKey) {
+          const config = vscode.workspace.getConfiguration("ai-assistant");
+          await config.update("openaiApiKey", apiKey, vscode.ConfigurationTarget.Global);
+          
+          aiService.updateConfiguration({
+            provider: "openai",
+            apiKey: apiKey,
+          });
+          
+          const connected = await aiService.updateApiKey(apiKey);
+          if (connected) {
+            vscode.window.showInformationMessage("OpenAI API key configured and connected successfully");
+          } else {
+            vscode.window.showErrorMessage("OpenAI API key configured but connection failed. Please check your key.");
+          }
+        }
       },
     ),
   ];
@@ -392,17 +423,38 @@ function setupEventListeners(
 /**
  * Creates and configures the status bar item
  */
-function createStatusBarItem(context: vscode.ExtensionContext): void {
+function createStatusBarItem(context: vscode.ExtensionContext, aiService: AIService): void {
   const statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
     100,
   );
-  statusBarItem.text = "$(robot) AI Assistant";
-  statusBarItem.tooltip = "Open AI Assistant Chat";
-  statusBarItem.command = "ai-assistant.openChat";
+  
+  // Update status bar item based on current provider
+  function updateStatusBar() {
+    const status = aiService.getConnectionStatus();
+    
+    statusBarItem.text = `$(robot) AI: OPENAI${status.connected ? '' : ' (disconnected)'}`;
+    statusBarItem.tooltip = `AI Assistant - OpenAI${status.connected ? '' : ' (disconnected)'}\nClick to open chat`;
+    statusBarItem.command = "ai-assistant.openChat";
+    
+    if (!status.connected) {
+      statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+    } else {
+      statusBarItem.backgroundColor = undefined;
+    }
+  }
+  
+  updateStatusBar();
   statusBarItem.show();
 
-  context.subscriptions.push(statusBarItem);
+  // Update status bar when configuration changes
+  const configDisposable = vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('ai-assistant')) {
+      updateStatusBar();
+    }
+  });
+
+  context.subscriptions.push(statusBarItem, configDisposable);
   console.log("[Extension] Status bar item created");
 }
 

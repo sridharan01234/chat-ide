@@ -2,7 +2,7 @@
  * Copilot-style input panel implementation
  */
 import * as vscode from "vscode";
-import { OllamaService } from "./ollamaService";
+import { AIService } from "./aiService";
 import { FileManager } from "./fileManager";
 import { ErrorUtils } from "./utils";
 
@@ -11,7 +11,7 @@ import { ErrorUtils } from "./utils";
  */
 export class CopilotPanel {
   private panel: vscode.InputBox | undefined;
-  private ollamaService: OllamaService;
+  private aiService: AIService;
   private fileManager: FileManager;
   private disposables: vscode.Disposable[] = [];
   private static instance: CopilotPanel | null = null;
@@ -20,17 +20,17 @@ export class CopilotPanel {
   private currentGhostText = "";
   private originalPosition: vscode.Position | undefined;
 
-  private constructor(ollamaService: OllamaService, fileManager: FileManager) {
-    this.ollamaService = ollamaService;
+  private constructor(aiService: AIService, fileManager: FileManager) {
+    this.aiService = aiService;
     this.fileManager = fileManager;
   }
 
   public static getInstance(
-    ollamaService: OllamaService,
+    aiService: AIService,
     fileManager: FileManager,
   ): CopilotPanel {
     if (!CopilotPanel.instance) {
-      CopilotPanel.instance = new CopilotPanel(ollamaService, fileManager);
+      CopilotPanel.instance = new CopilotPanel(aiService, fileManager);
     }
     return CopilotPanel.instance;
   }
@@ -74,7 +74,7 @@ export class CopilotPanel {
           this.fileManager.createFileReferenceFromDocument(document);
 
         // Call LLM service with the query and context
-        const response = await this.ollamaService.getCompletion(query, [
+        const response = await this.aiService.getCompletion(query, [
           fileReference,
         ]);
 
@@ -326,7 +326,7 @@ export class CopilotPanel {
         const enhancedQuery = `Context: ${document.languageId} file\nSurrounding code:\n\`\`\`\n${contextCode}\n\`\`\`\n\nUser request: ${query}\n\nPlease provide a helpful response. If suggesting code, provide only the code that should be inserted at line ${this.originalPosition.line + 1}.`;
 
         // Call LLM service with enhanced context
-        const response = await this.ollamaService.getCompletion(enhancedQuery, [
+        const response = await this.aiService.getCompletion(enhancedQuery, [
           fileReference,
         ]);
 
