@@ -55,48 +55,6 @@ export interface DropZoneItem {
 }
 
 /**
- * Ollama service message format
- */
-export interface OllamaMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
-
-/**
- * Ollama API response format
- */
-export interface OllamaResponse {
-  message: {
-    role: string;
-    content: string;
-  };
-  done: boolean;
-  total_duration?: number;
-  load_duration?: number;
-  prompt_eval_count?: number;
-  prompt_eval_duration?: number;
-  eval_count?: number;
-  eval_duration?: number;
-}
-
-/**
- * Ollama model information
- */
-export interface OllamaModelInfo {
-  name: string;
-  size: number;
-  digest: string;
-  details: {
-    format: string;
-    family: string;
-    families: string[];
-    parameter_size: string;
-    quantization_level: string;
-  };
-  modified_at: string;
-}
-
-/**
  * Connection status for services
  */
 export interface ServiceConnectionStatus {
@@ -290,3 +248,48 @@ export const DEFAULT_OLLAMA_CONFIG: OllamaConfig = {
   topP: 0.9,
   topK: 40,
 };
+
+/**
+ * OpenAI service message format
+ */
+export interface OpenAIMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+/**
+ * OpenAI API response format (simplified)
+ */
+export interface OpenAIResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: {
+    index: number;
+    message: {
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+  }[];
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+/**
+ * AI Service Provider type
+ */
+export type AIProvider = "openai";
+
+/**
+ * AI Service Configuration
+ */
+export interface AIServiceConfig {
+  provider: AIProvider;
+  model?: string;
+  apiKey?: string;
+}

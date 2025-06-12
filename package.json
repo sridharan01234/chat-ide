@@ -1,7 +1,7 @@
 {
   "name": "ai-code-assistant",
   "displayName": "AI Code Assistant",
-  "description": "An AI-powered code assistant with enhanced drag-and-drop functionality.",
+  "description": "An OpenAI-powered code assistant with enhanced drag-and-drop functionality.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.80.0"
@@ -104,6 +104,11 @@
         "command": "ai-assistant.closeCopilotPanel",
         "title": "Close Copilot-style Input Panel",
         "icon": "$(close)"
+      },
+      {
+        "command": "ai-assistant.configureOpenAI",
+        "title": "Configure OpenAI API Key",
+        "icon": "$(key)"
       }
     ],
     "menus": {
@@ -254,7 +259,22 @@
         "key": "escape",
         "when": "copilotPanelVisible"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "AI Assistant",
+      "properties": {
+        "ai-assistant.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API key (required)"
+        },
+        "ai-assistant.model": {
+          "type": "string",
+          "default": "gpt-3.5-turbo",
+          "description": "Default OpenAI model to use (e.g., 'gpt-3.5-turbo', 'gpt-4', 'gpt-4o')"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -262,13 +282,13 @@
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
+    "@types/jquery": "^3.5.29",
     "@types/node": "^22.15.29",
     "@types/vscode": "^1.80.0",
-    "@types/jquery": "^3.5.29",
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "axios": "^1.9.0",
-    "jquery": "^3.7.1"
+    "jquery": "^3.7.1",
+    "openai": "^5.3.0"
   }
 }

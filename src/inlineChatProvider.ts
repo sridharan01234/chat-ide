@@ -5,7 +5,7 @@
  */
 
 import * as vscode from "vscode";
-import { OllamaService } from "./ollamaService";
+import { AIService } from "./aiService";
 
 // Extend vscode types to include proposed API
 declare module 'vscode' {
@@ -30,20 +30,20 @@ declare module 'vscode' {
 
 export class InlineChatProvider {
   private static instance: InlineChatProvider;
-  private ollamaService: OllamaService;
+  private aiService: AIService;
   private activeSession: InlineInputSession | undefined;
   private disposables: vscode.Disposable[] = [];
 
-  private constructor(ollamaService: OllamaService) {
-    this.ollamaService = ollamaService;
+  private constructor(aiService: AIService) {
+    this.aiService = aiService;
   }
 
   public static getInstance(
-    ollamaService: OllamaService,
+    aiService: AIService,
   ): InlineChatProvider {
     if (!InlineChatProvider.instance) {
       InlineChatProvider.instance = new InlineChatProvider(
-        ollamaService,
+        aiService,
       );
     }
     return InlineChatProvider.instance;
@@ -69,7 +69,7 @@ export class InlineChatProvider {
       this.activeSession = new InlineInputSession(
         editor,
         position,
-        this.ollamaService
+        this.aiService
       );
 
       await this.activeSession.start();
@@ -120,20 +120,26 @@ export class InlineChatProvider {
 class InlineInputSession {
   private editor: vscode.TextEditor;
   private position: vscode.Position;
-  private ollamaService: OllamaService;
+  private aiService: AIService;
   private webviewInset: vscode.WebviewEditorInset | undefined;
+  private diffInset: vscode.WebviewEditorInset | undefined;
+  private oldDecoration: vscode.TextEditorDecorationType | undefined;
+  private newDecoration: vscode.TextEditorDecorationType | undefined;
+  private actionDecoration: vscode.TextEditorDecorationType | undefined;
   private disposables: vscode.Disposable[] = [];
   private isProcessing = false;
   private currentSuggestion = "";
+  private oldCode: string = "";
+  private newCode: string = "";
 
   constructor(
     editor: vscode.TextEditor,
     position: vscode.Position,
-    ollamaService: OllamaService
+    aiService: AIService
   ) {
     this.editor = editor;
     this.position = position;
-    this.ollamaService = ollamaService;
+    this.aiService = aiService;
   }
 
   /**
@@ -141,7 +147,8 @@ class InlineInputSession {
    */
   public async start(): Promise<void> {
     try {
-      // Create webview inset above the current line
+
+      // Create webview inset for input above the current line
       this.webviewInset = (vscode.window as any).createWebviewTextEditorInset(
         this.editor,
         this.position.line - 1,
@@ -152,29 +159,19 @@ class InlineInputSession {
           enableCommandUris: true,
         }
       );
-
       if (!this.webviewInset) {
         throw new Error('Failed to create webview inset');
       }
-
-      // Set up the webview content
-      this.webviewInset.webview.html = this.getWebviewContent();
-
-      // Handle messages from the webview
+      this.webviewInset.webview.html = this.getInputWebviewContent();
       const messageDisposable = this.webviewInset.webview.onDidReceiveMessage(
         async (message) => {
           await this.handleWebviewMessage(message);
         }
       );
-
-      // Handle inset disposal
       const disposeDisposable = this.webviewInset.onDidDispose(() => {
         this.dispose();
       });
-
       this.disposables.push(messageDisposable, disposeDisposable);
-
-      // Focus the input in the webview
       setTimeout(() => {
         this.webviewInset?.webview.postMessage({ type: 'focus' });
       }, 100);
@@ -189,9 +186,9 @@ class InlineInputSession {
   /**
    * Generate HTML content for the webview inset
    */
-  private getWebviewContent(): string {
+  // Webview for input (simple prompt box)
+  private getInputWebviewContent(): string {
     const nonce = this.getNonce();
-    
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -200,123 +197,73 @@ class InlineInputSession {
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <title>AI Inline Chat</title>
     <style>
-        body {
-            margin: 20px;
-            padding: 8px;
-            font-family: var(--vscode-font-family);
-            font-size: var(--vscode-font-size);
-            background-color: var(--vscode-input-background);
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            height: 44px;
-            box-sizing: border-box;
-        }
-        
-        .chat-icon {
-            color: var(--vscode-button-background);
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-        
-        #chatInput {
-            flex: 1;
-            border: none;
-            background: transparent;
-            color: var(--vscode-input-foreground);
-            font-family: inherit;
-            font-size: inherit;
-            outline: none;
-            padding: 0;
-        }
-        
-        #chatInput::placeholder {
-            color: var(--vscode-input-placeholderForeground);
-        }
-        
-        .send-btn {
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            border-radius: 3px;
-            padding: 4px 8px;
-            cursor: pointer;
-            font-size: 12px;
-            flex-shrink: 0;
-        }
-        
-        .send-btn:hover {
-            background: var(--vscode-button-hoverBackground);
-        }
-        
-        .send-btn:disabled {
-            background: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-            cursor: not-allowed;
-        }
-        
-        .processing {
-            color: var(--vscode-descriptionForeground);
-            font-style: italic;
-        }
+      body { margin: 0; padding: 0; font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); background: var(--vscode-editor-background); color: var(--vscode-foreground); min-width: 400px; }
+      .input-container { display: flex; gap: 8px; padding: 8px; }
+      .input-box { flex: 1; font-size: 1em; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--vscode-widget-border); background: var(--vscode-editorWidget-background); color: var(--vscode-foreground); }
+      .send-btn { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 3px; padding: 2px 12px; font-size: 1em; cursor: pointer; }
+      .send-btn:hover { background: var(--vscode-button-hoverBackground); }
     </style>
 </head>
 <body>
-    <div class="chat-icon">💬</div>
-    <input type="text" id="chatInput" placeholder="Ask AI to help with your code..." />
-    <button id="sendBtn" class="send-btn">Send</button>
-    
-    <script nonce="${nonce}">
-        const vscode = acquireVsCodeApi();
-        const input = document.getElementById('chatInput');
-        const sendBtn = document.getElementById('sendBtn');
-        
-        // Focus input when requested
-        window.addEventListener('message', event => {
-            const message = event.data;
-            if (message.type === 'focus') {
-                input.focus();
-            } else if (message.type === 'processing') {
-                input.disabled = true;
-                sendBtn.disabled = true;
-                input.placeholder = 'AI is thinking...';
-                input.classList.add('processing');
-            } else if (message.type === 'ready') {
-                input.disabled = false;
-                sendBtn.disabled = false;
-                input.placeholder = 'Ask AI to help with your code...';
-                input.classList.remove('processing');
-                input.value = '';
-                input.focus();
-            }
-        });
-        
-        function sendMessage() {
-            const text = input.value.trim();
-            if (text && !input.disabled) {
-                vscode.postMessage({
-                    type: 'userInput',
-                    text: text
-                });
-            }
-        }
-        
-        sendBtn.addEventListener('click', sendMessage);
-        
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            } else if (e.key === 'Escape') {
-                vscode.postMessage({ type: 'cancel' });
-            }
-        });
-        
-        // Auto-focus when created
-        setTimeout(() => input.focus(), 50);
-    </script>
+  <form class="input-container">
+    <input class="input-box" id="userInput" type="text" placeholder="Ask AI..." autofocus />
+    <button class="send-btn" id="sendBtn" type="submit">Send</button>
+  </form>
+  <script nonce="${nonce}">
+    const vscode = acquireVsCodeApi();
+    document.querySelector('form').onsubmit = (e) => {
+      e.preventDefault();
+      const val = document.getElementById('userInput').value;
+      vscode.postMessage({ type: 'userInput', text: val });
+    };
+    window.addEventListener('message', event => {
+      if (event.data.type === 'focus') {
+        document.getElementById('userInput').focus();
+      }
+    });
+  </script>
+</body>
+</html>`;
+  }
+
+  // Webview for diff (old/new code, action buttons)
+  private getDiffWebviewContent(oldCode: string, newCode: string): string {
+    const nonce = this.getNonce();
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <title>AI Inline Diff</title>
+    <style>
+      body { margin: 0; padding: 0; font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); background: var(--vscode-editor-background); color: var(--vscode-foreground); min-width: 400px; }
+      .diff-container { position: relative; border-radius: 8px; background: #23272e; box-shadow: 0 4px 24px rgba(0,0,0,0.18); margin-bottom: 8px; padding: 0 0 8px 0; font-family: 'JetBrains Mono', 'Fira Mono', 'Menlo', 'monospace'; }
+      .diff-old { background: #3c1e1e; color: #ffebe9; border-left: 4px solid #e5534b; padding: 12px 20px; margin: 0; white-space: pre; font-size: 1em; border-radius: 0 0 8px 8px; }
+      .diff-new { background: #1e3c1e; color: #e6ffed; border-left: 4px solid #34d058; padding: 12px 20px; margin: 0; white-space: pre; font-size: 1em; border-radius: 0 0 8px 8px; }
+      .diff-line { font-family: inherit; line-height: 1.6; }
+      .diff-action-bar { position: absolute; top: 10px; right: 16px; display: flex; gap: 8px; z-index: 10; }
+      .diff-btn { background: #388bfd; border: none; border-radius: 6px; box-shadow: 0 2px 8px rgba(56,139,253,0.18); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.18s, box-shadow 0.18s; outline: none; }
+      .diff-btn:hover { background: #2a7ae4; }
+    </style>
+</head>
+<body>
+  <div class="diff-container">
+    <div class="diff-action-bar">
+      <button class="diff-btn accept" id="acceptBtn" title="Accept (Ctrl+Y)">
+        <svg width="18" height="18" viewBox="0 0 20 20"><path fill="white" d="M7.5 14.5l-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4z"/></svg>
+      </button>
+      <button class="diff-btn discard" id="rejectBtn" title="Discard (Esc)">
+        <svg width="18" height="18" viewBox="0 0 20 20"><path fill="white" d="M6.7 6.7l6.6 6.6m0-6.6l-6.6 6.6" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <pre class="diff-old diff-line" id="oldCode">${oldCode ? oldCode.replace(/</g, '&lt;') : ''}</pre>
+  </div>
+  <script nonce="${nonce}">
+    const vscode = acquireVsCodeApi();
+    document.getElementById('acceptBtn').onclick = () => vscode.postMessage({ type: 'accept' });
+    document.getElementById('rejectBtn').onclick = () => vscode.postMessage({ type: 'reject' });
+  </script>
 </body>
 </html>`;
   }
@@ -329,6 +276,12 @@ class InlineInputSession {
       case 'userInput':
         await this.processUserInput(message.text);
         break;
+      case 'accept':
+        await this.acceptDiff();
+        break;
+      case 'reject':
+        await this.rejectDiff();
+        break;
       case 'cancel':
         this.dispose();
         break;
@@ -339,38 +292,204 @@ class InlineInputSession {
    * Process user input and get AI response
    */
   private async processUserInput(userInput: string): Promise<void> {
-    if (this.isProcessing) {
-      return;
-    }
-
+    if (this.isProcessing) return;
     this.isProcessing = true;
-
     try {
-      // Show processing state
-      this.webviewInset?.webview.postMessage({ type: 'processing' });
-
       // Get context from the current document
       const context = this.getContext();
-      
-      // Create prompt with context
       const prompt = this.createPrompt(userInput, context);
-
-      // Get AI response
-      const response = await this.ollamaService.generateResponse(prompt);
-
+      const response = await this.aiService.generateResponse(prompt);
       if (response) {
-        await this.showSuggestion(response);
+        // Save old and new code for diff
+        const selection = this.editor.selection;
+        if (!selection.isEmpty) {
+          this.oldCode = this.editor.document.getText(selection);
+        } else {
+          this.oldCode = '';
+        }
+        // Extract code block if present
+        const codeMatch = response.match(/```(?:\w+)?\n?([\s\S]*?)```/);
+        this.newCode = codeMatch ? codeMatch[1].trim() : response.trim();
+        this.currentSuggestion = response;
+        // Close input inset
+        this.webviewInset?.dispose();
+        this.webviewInset = undefined;
+        // Show inline diff decorations and actions
+        await this.showInlineDiff();
       } else {
         vscode.window.showWarningMessage("No response received from AI");
         this.dispose();
       }
-
     } catch (error) {
       console.error("Error processing user input:", error);
       vscode.window.showErrorMessage(`AI request failed: ${error}`);
       this.dispose();
     } finally {
       this.isProcessing = false;
+    }
+  }
+
+  // Show diff in a webview inset with real HTML buttons and color blocks
+  private async showInlineDiff(): Promise<void> {
+    // Close any previous diff inset
+    if (this.diffInset) {
+      this.diffInset.dispose();
+      this.diffInset = undefined;
+    }
+    // Remove any previous green decoration
+    if (this.newDecoration) {
+      this.editor.setDecorations(this.newDecoration, []);
+      this.newDecoration.dispose();
+      this.newDecoration = undefined;
+    }
+    // Show webview inset at the affected line (virtual line)
+    const selection = this.editor.selection;
+    const line = !selection.isEmpty ? selection.start.line : this.position.line;
+    // Calculate the number of lines in the old code to set the inset height dynamically
+    const oldCodeLines = this.oldCode ? this.oldCode.split('\n').length : 1;
+    // Add a few extra lines for action bar and padding
+    const insetHeight = Math.max(3, oldCodeLines + 2);
+    this.diffInset = (vscode.window as any).createWebviewTextEditorInset(
+      this.editor,
+      line,
+      insetHeight,
+      {
+        enableScripts: true,
+        localResourceRoots: [],
+        enableCommandUris: true,
+      }
+    );
+    if (!this.diffInset) {
+      throw new Error('Failed to create diff webview inset');
+    }
+    this.diffInset.webview.html = this.getDiffWebviewContent(this.oldCode, this.newCode);
+
+    // Show new code as a green decoration below the inset
+    const newCodeLine = line + 1;
+    const decorationType = (require('vscode')).window.createTextEditorDecorationType({
+      isWholeLine: true,
+      backgroundColor: '#1e3c1e',
+      after: {
+        contentText: '',
+      },
+    });
+    // @ts-ignore
+    this.newDecoration = decorationType;
+    const newCodeLines = this.newCode.split('\n');
+    const decorations = newCodeLines.map((text, idx) => ({
+      range: new (require('vscode')).Range(newCodeLine + idx, 0, newCodeLine + idx, 0),
+      renderOptions: {
+        before: {
+          contentText: text,
+          color: '#e6ffed',
+          fontStyle: 'normal',
+          fontWeight: 'normal',
+          fontFamily: 'JetBrains Mono, Fira Mono, Menlo, monospace',
+        },
+      },
+    }));
+    this.editor.setDecorations(decorationType, decorations);
+
+    const msgDisp = this.diffInset.webview.onDidReceiveMessage(async (msg) => {
+      if (msg.type === 'accept' || msg.type === 'reject') {
+        // Remove green decoration and close inset
+        // @ts-ignore
+        if (this.newDecoration) {
+          this.editor.setDecorations(this.newDecoration, []);
+          this.newDecoration.dispose();
+          this.newDecoration = undefined;
+        }
+        this.diffInset?.dispose();
+        this.diffInset = undefined;
+        if (msg.type === 'accept') {
+          await this.applyNewCode();
+        }
+      }
+    });
+    const dispDisp = this.diffInset.onDidDispose(() => {
+      // @ts-ignore
+      if (this.newDecoration) {
+        this.editor.setDecorations(this.newDecoration, []);
+        this.newDecoration.dispose();
+        this.newDecoration = undefined;
+      }
+      this.dispose();
+    });
+    this.disposables.push(msgDisp, dispDisp);
+  }
+
+  // Apply the new code in the editor (replace the old code with new code)
+  private async applyNewCode(): Promise<void> {
+    // Replace the selected range if there is a selection, otherwise use the old logic
+    const selection = this.editor.selection;
+    if (!selection.isEmpty) {
+      await this.editor.edit((editBuilder) => {
+        editBuilder.replace(selection, this.newCode);
+      });
+    } else {
+      const edit = new (require('vscode')).WorkspaceEdit();
+      const range = new (require('vscode')).Range(this.position, this.position.translate(0, this.oldCode.length));
+      edit.replace(this.editor.document.uri, range, this.newCode);
+      await (require('vscode')).workspace.applyEdit(edit);
+    }
+  }
+
+  // Show the diff inset with accept/discard
+  // (No longer needed: showDiffInset)
+
+  // Accept: apply new code
+  private async acceptDiff(): Promise<void> {
+    const selection = this.editor.selection;
+    if (!selection.isEmpty) {
+      await this.editor.edit((editBuilder) => {
+        editBuilder.replace(selection, this.newCode);
+      });
+    } else {
+      await this.editor.edit((editBuilder) => {
+        editBuilder.insert(this.position, this.newCode + '\n');
+      });
+    }
+    vscode.window.showInformationMessage("✅ AI suggestion accepted");
+    this.clearDiffDecorations();
+    if (this.diffInset) {
+      this.diffInset.dispose();
+      this.diffInset = undefined;
+    }
+  }
+
+  // Reject: revert to old code
+  private async rejectDiff(): Promise<void> {
+    const selection = this.editor.selection;
+    if (!selection.isEmpty) {
+      await this.editor.edit((editBuilder) => {
+        editBuilder.replace(selection, this.oldCode);
+      });
+    } else {
+      // If nothing was selected, just do nothing (no change)
+    }
+    vscode.window.showInformationMessage("❌ AI suggestion rejected");
+    this.clearDiffDecorations();
+    if (this.diffInset) {
+      this.diffInset.dispose();
+      this.diffInset = undefined;
+    }
+  }
+
+  private clearDiffDecorations() {
+    if (this.oldDecoration) {
+      this.editor.setDecorations(this.oldDecoration, []);
+      this.oldDecoration.dispose();
+      this.oldDecoration = undefined;
+    }
+    if (this.newDecoration) {
+      this.editor.setDecorations(this.newDecoration, []);
+      this.newDecoration.dispose();
+      this.newDecoration = undefined;
+    }
+    if (this.actionDecoration) {
+      this.editor.setDecorations(this.actionDecoration, []);
+      this.actionDecoration.dispose();
+      this.actionDecoration = undefined;
     }
   }
 
@@ -605,15 +724,29 @@ Please provide a helpful response. If you're suggesting code changes, provide on
    * Accept the current suggestion
    */
   public async acceptSuggestion(): Promise<void> {
-    // Implementation handled in insertCodeSuggestion
+    // Accept: insert/replace code
+    const selection = this.editor.selection;
+    let suggestion = this.currentSuggestion;
+    // Extract code block if present
+    const codeMatch = suggestion.match(/```(?:\w+)?\n?([\s\S]*?)```/);
+    if (codeMatch) suggestion = codeMatch[1].trim();
+
+    if (!suggestion) return;
+
+    if (!selection.isEmpty) {
+      await this.editor.edit((editBuilder) => {
+        editBuilder.replace(selection, suggestion);
+      });
+    } else {
+      await this.editor.edit((editBuilder) => {
+        editBuilder.insert(this.position, suggestion + '\n');
+      });
+    }
     this.dispose();
   }
 
-  /**
-   * Reject the current suggestion
-   */
   public rejectSuggestion(): void {
-    // Implementation handled in insertCodeSuggestion
+    // Just close the webview inset
     this.dispose();
   }
 
@@ -625,7 +758,11 @@ Please provide a helpful response. If you're suggesting code changes, provide on
       this.webviewInset.dispose();
       this.webviewInset = undefined;
     }
-
+    if (this.diffInset) {
+      this.diffInset.dispose();
+      this.diffInset = undefined;
+    }
+    this.clearDiffDecorations();
     this.disposables.forEach(d => d.dispose());
     this.disposables = [];
   }
@@ -636,7 +773,7 @@ Please provide a helpful response. If you're suggesting code changes, provide on
  */
 export function registerInlineCompletions(
   context: vscode.ExtensionContext,
-  ollamaService: OllamaService,
+  aiService: AIService,
 ) {
   const provider: vscode.InlineCompletionItemProvider = {
     async provideInlineCompletionItems(
@@ -675,7 +812,7 @@ export function registerInlineCompletions(
 
       let suggestionText = "";
       try {
-        const response = await ollamaService.generateResponse(prompt);
+        const response = await aiService.generateResponse(prompt);
         const codeMatch = response.match(/```(?:\w+)?\n?([\s\S]*?)```/);
         suggestionText = (codeMatch ? codeMatch[1] : response).trim();
       } catch (error) {

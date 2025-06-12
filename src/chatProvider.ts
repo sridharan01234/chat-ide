@@ -19,7 +19,7 @@ import {
 } from "./types";
 import { StringUtils, FileUtils, ErrorUtils } from "./utils";
 import { FileManager, FileAttachmentManager } from "./fileManager";
-import { OllamaService } from "./ollamaService";
+import { AIService } from "./aiService";
 
 /**
  * Main chat provider that handles the webview and chat functionality
@@ -31,17 +31,17 @@ export class ChatProvider implements vscode.WebviewViewProvider {
   private messages: ChatMessage[] = [];
   private fileManager: FileManager;
   private fileAttachmentManager: FileAttachmentManager;
-  private ollamaService: OllamaService;
+  private aiService: AIService;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     fileManager: FileManager,
     fileAttachmentManager: FileAttachmentManager,
-    ollamaService: OllamaService,
+    aiService: AIService,
   ) {
     this.fileManager = fileManager;
     this.fileAttachmentManager = fileAttachmentManager;
-    this.ollamaService = ollamaService;
+    this.aiService = aiService;
   }
 
   /**
@@ -162,7 +162,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
       }
 
       // Check if Ollama service is available
-      const connectionStatus = this.ollamaService.getConnectionStatus();
+      const connectionStatus = this.aiService.getConnectionStatus();
       if (!connectionStatus.connected) {
         throw new Error(
           "AI service is not available. Please make sure Ollama is running.",
@@ -183,7 +183,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
       }
 
       // Generate AI response using the correct method
-      const aiResponse = await this.ollamaService.getCodingHelp(text, context);
+      const aiResponse = await this.aiService.getCodingHelp(text, context);
 
       // Remove typing indicator and add real response
       const assistantMessage: ChatMessage = {
